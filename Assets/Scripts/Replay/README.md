@@ -31,3 +31,50 @@ Compared with direct point-to-point lerp playback, this approach gives:
 - smoother cornering
 - less overshoot and fewer sudden twitches
 - a cleaner foundation for later work such as wheel rotation, steering visuals, and timeline controls
+
+## ReplayVehicleVisualController
+
+`ReplayVehicleVisualController` is an optional visual-only layer for replay cars.
+
+It does not move the car. The replay scripts still control world position and heading.
+
+### What to bind
+
+- `visualRoot`
+  - The car body visual root.
+  - This is the node that receives body roll.
+- `frontLeftSteerPivot`
+  - The front-left steering pivot node.
+- `frontRightSteerPivot`
+  - The front-right steering pivot node.
+- `frontLeftWheel`
+  - The actual front-left wheel mesh or wheel visual node.
+- `frontRightWheel`
+  - The actual front-right wheel mesh or wheel visual node.
+- `rearLeftWheel`
+  - The actual rear-left wheel mesh or wheel visual node.
+- `rearRightWheel`
+  - The actual rear-right wheel mesh or wheel visual node.
+
+### Important note about model structure
+
+This controller assumes the model has:
+
+- a clean body node
+- separate front steering pivots
+- separate wheel nodes that can rotate independently
+
+If the imported car model mixes body, suspension, and wheel nodes together, enabling steering or wheel spin can rotate the wrong part of the car.
+
+That is why the current defaults are conservative:
+
+- `enableWheelSpin = false`
+- `enableSteering = false`
+- `enableBodyRoll = false`
+
+### Suggested workflow
+
+1. First confirm the replay car moves correctly without the visual controller features enabled.
+2. Then test `enableSteering` only.
+3. Then test `enableBodyRoll` only.
+4. Only enable `enableWheelSpin` when the model has verified wheel-only nodes.

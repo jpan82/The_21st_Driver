@@ -20,8 +20,8 @@ public class CSVMovementPlayer : MonoBehaviour
     public float fixedXRotation = -90f;
 
     private string filePath;
-    private Vector3 csvOffset;
     private LineRenderer trackLine;
+    private DriverReplayTrack replayTrack;
 
     void Start()
     {
@@ -42,55 +42,40 @@ public class CSVMovementPlayer : MonoBehaviour
 
     IEnumerator ExecuteRaceSequence()
     {
-        if (!File.Exists(filePath)) yield break;
-        string[] lines = File.ReadAllLines(filePath);
-        if (lines.Length < 2) yield break;
+        replayTrack = FastF1CsvImporter.LoadTrackFromFile(filePath);
+        if (replayTrack.samples.Count < 2) yield break;
 
-        // Calculate Offset
-        string[] firstRow = lines[1].Split(',');
-        float fX = float.Parse(firstRow[1]);
-        float fY = float.Parse(firstRow[3]); 
-        float fZ = float.Parse(firstRow[2]); 
-        csvOffset = Vector3.zero - new Vector3(fX, fY, fZ);
+        DrawFullTrack(replayTrack);
 
-        // Draw the track exactly on the data points
-        DrawFullTrack(lines);
-
-        // Teleport car to start + offset
         transform.position = Vector3.up * carVerticalOffset;
         yield return new WaitForSeconds(1.5f); 
 
-        yield return StartCoroutine(MoveCar(lines));
+        yield return StartCoroutine(MoveCar(replayTrack));
     }
 
-    void DrawFullTrack(string[] lines)
+    void DrawFullTrack(DriverReplayTrack track)
     {
         List<Vector3> allPoints = new List<Vector3>();
-        for (int i = 1; i < lines.Length; i++)
+        foreach (ReplaySample sample in track.samples)
         {
-            string[] cols = lines[i].Split(',');
-            // Mapping: X, Altitude, Z
-            Vector3 pos = new Vector3(float.Parse(cols[1]), float.Parse(cols[3]), float.Parse(cols[2])) + csvOffset;
-            allPoints.Add(pos);
+            allPoints.Add(sample.worldPosition);
         }
         trackLine.positionCount = allPoints.Count;
         trackLine.SetPositions(allPoints.ToArray());
     }
 
-    IEnumerator MoveCar(string[] lines)
+    IEnumerator MoveCar(DriverReplayTrack track)
     {
-        for (int i = 1; i < lines.Length - 1; i++)
+        for (int i = 0; i < track.samples.Count - 1; i++)
         {
-            string[] curLine = lines[i].Split(',');
-            string[] nextLine = lines[i + 1].Split(',');
+            ReplaySample cur = track.samples[i];
+            ReplaySample next = track.samples[i + 1];
 
-            // Car position includes the Vertical Offset
-            Vector3 startPos = new Vector3(float.Parse(curLine[1]), float.Parse(curLine[3]) + carVerticalOffset, float.Parse(curLine[2])) + csvOffset;
-            Vector3 endPos = new Vector3(float.Parse(nextLine[1]), float.Parse(nextLine[3]) + carVerticalOffset, float.Parse(nextLine[2])) + csvOffset;
+            Vector3 startPos = cur.worldPosition + Vector3.up * carVerticalOffset;
+            Vector3 endPos = next.worldPosition + Vector3.up * carVerticalOffset;
 
-            float duration = (float.Parse(nextLine[0]) - float.Parse(curLine[0])) / speedMultiplier;
+            float duration = (next.sessionTimeSeconds - cur.sessionTimeSeconds) / speedMultiplier;
 
-            // Rotation
             Vector3 moveDir = (endPos - startPos).normalized;
             if (moveDir != Vector3.zero)
             {
@@ -98,7 +83,6 @@ public class CSVMovementPlayer : MonoBehaviour
                 transform.rotation = Quaternion.Euler(fixedXRotation, lookRot.eulerAngles.y, 0f);
             }
 
-            // Movement
             float elapsed = 0f;
             while (elapsed < duration)
             {

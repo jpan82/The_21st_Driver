@@ -1,6 +1,5 @@
-using UnityEngine;
-using System.Collections.Generic;
 using System.IO;
+using UnityEngine;
 
 public class F1_RaceManager : MonoBehaviour
 {
@@ -11,9 +10,6 @@ public class F1_RaceManager : MonoBehaviour
     public float trackWidth = 20f;
     public Color trackColor = new Color(0.2f, 0.2f, 0.2f, 1f);
 
-    private Vector3 globalOffset;
-    private bool offsetInitialized = false;
-
     void Start()
     {
         if (carPrefab == null) {
@@ -21,45 +17,27 @@ public class F1_RaceManager : MonoBehaviour
         }
 
         string path = Path.Combine(Application.streamingAssetsPath, folderName);
-        if (!Directory.Exists(path)) {
-            Debug.LogError("Cannot find the file: " + path);
+        ReplaySession session = FastF1CsvImporter.LoadSessionFromFolder(path);
+        if (session.tracks.Count == 0)
+        {
             return;
         }
 
-        string[] csvFiles = Directory.GetFiles(path, "*.csv");
-        int carIndex = 0;
-
-        foreach (string file in csvFiles)
+        for (int carIndex = 0; carIndex < session.tracks.Count; carIndex++)
         {
-            if (!offsetInitialized)
-            {
-                InitializeGlobalOffset(file);
-                offsetInitialized = true;
-            }
+            DriverReplayTrack track = session.tracks[carIndex];
 
             GameObject car = Instantiate(carPrefab);
-            car.name = Path.GetFileNameWithoutExtension(file);
+            car.name = track.driverId;
 
             F1_Driver_Follower driver = car.GetComponent<F1_Driver_Follower>();
             if (driver == null) driver = car.AddComponent<F1_Driver_Follower>();
 
-            driver.csvPath = file;
-            driver.globalOffset = globalOffset; 
+            driver.replayTrack = track;
             driver.speedMultiplier = speedMultiplier;
             driver.uniqueYOffset = carIndex * 0.01f;
             driver.racingLineWidth = trackWidth;
             driver.pathColor = trackColor;
-
-            carIndex++;
-        }
-    }
-
-    void InitializeGlobalOffset(string file)
-    {
-        string[] lines = File.ReadAllLines(file);
-        if (lines.Length > 1) {
-            string[] cols = lines[1].Split(',');
-            globalOffset = Vector3.zero - new Vector3(float.Parse(cols[1]), float.Parse(cols[3]), float.Parse(cols[2]));
         }
     }
 }

@@ -5,6 +5,7 @@ using System.IO;
 
 public class F1_Driver_Follower : MonoBehaviour
 {
+    [HideInInspector] public DriverReplayTrack replayTrack;
     [HideInInspector] public string csvPath;
     [HideInInspector] public Vector3 globalOffset;
     [HideInInspector] public float uniqueYOffset;
@@ -22,9 +23,8 @@ public class F1_Driver_Follower : MonoBehaviour
 
     IEnumerator DriveSequence()
     {
-        if (!File.Exists(csvPath)) yield break;
-        string[] lines = File.ReadAllLines(csvPath);
-        if (lines.Length < 3) yield break;
+        DriverReplayTrack track = LoadTrackIfNeeded();
+        if (track == null || track.samples.Count < 2) yield break;
 
         LineRenderer lr = gameObject.AddComponent<LineRenderer>();
         lr.startWidth = lr.endWidth = racingLineWidth;
@@ -34,23 +34,22 @@ public class F1_Driver_Follower : MonoBehaviour
         lr.sortingOrder = -1;
 
         List<Vector3> points = new List<Vector3>();
-        for (int j = 1; j < lines.Length; j++)
+        foreach (ReplaySample sample in track.samples)
         {
-            string[] c = lines[j].Split(',');
-            Vector3 p = new Vector3(float.Parse(c[1]), float.Parse(c[3]) + uniqueYOffset, float.Parse(c[2])) + globalOffset;
+            Vector3 p = sample.worldPosition + new Vector3(0f, uniqueYOffset, 0f);
             points.Add(p);
         }
         lr.positionCount = points.Count;
         lr.SetPositions(points.ToArray());
 
-        for (int i = 1; i < lines.Length - 1; i++)
+        for (int i = 0; i < track.samples.Count - 1; i++)
         {
-            string[] cur = lines[i].Split(',');
-            string[] nxt = lines[i+1].Split(',');
+            ReplaySample cur = track.samples[i];
+            ReplaySample nxt = track.samples[i + 1];
 
-            Vector3 startPos = new Vector3(float.Parse(cur[1]), float.Parse(cur[3]) + carVerticalOffset + uniqueYOffset, float.Parse(cur[2])) + globalOffset;
-            Vector3 endPos = new Vector3(float.Parse(nxt[1]), float.Parse(nxt[3]) + carVerticalOffset + uniqueYOffset, float.Parse(nxt[2])) + globalOffset;
-            float duration = (float.Parse(nxt[0]) - float.Parse(cur[0])) / speedMultiplier;
+            Vector3 startPos = cur.worldPosition + new Vector3(0f, carVerticalOffset + uniqueYOffset, 0f);
+            Vector3 endPos = nxt.worldPosition + new Vector3(0f, carVerticalOffset + uniqueYOffset, 0f);
+            float duration = (nxt.sessionTimeSeconds - cur.sessionTimeSeconds) / speedMultiplier;
 
             if (duration > 0)
             {
@@ -67,5 +66,21 @@ public class F1_Driver_Follower : MonoBehaviour
                 }
             }
         }
+    }
+
+    DriverReplayTrack LoadTrackIfNeeded()
+    {
+        if (replayTrack != null && replayTrack.samples.Count > 0)
+        {
+            return replayTrack;
+        }
+
+        if (string.IsNullOrWhiteSpace(csvPath) || !File.Exists(csvPath))
+        {
+            return null;
+        }
+
+        replayTrack = FastF1CsvImporter.LoadTrackFromFile(csvPath, globalOffset);
+        return replayTrack;
     }
 }

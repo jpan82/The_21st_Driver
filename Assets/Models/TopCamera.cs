@@ -6,7 +6,7 @@ public class F1_TopDownCamera : MonoBehaviour
     private enum CameraMode
     {
         TopDown,
-        Chase
+        ChaseWorld
     }
 
     [Header("俯视视角")]
@@ -14,8 +14,8 @@ public class F1_TopDownCamera : MonoBehaviour
     public float followSmoothness = 5f;
 
     [Header("跟车视角")]
-    public Vector3 chaseOffset = new Vector3(0f, 10f, -14f);
-    public float chaseLookAtHeight = 1.5f;
+    public Vector3 chaseWorldOffset = new Vector3(0f, 130f, -200f);
+    public float chaseLookAtHeight = 2.5f;
     public float rotationSmoothness = 6f;
 
     [Header("输入")]
@@ -31,25 +31,29 @@ public class F1_TopDownCamera : MonoBehaviour
     {
         if (targetCar == null)
         {
-            F1_Driver_Follower[] drivers = Object.FindObjectsByType<F1_Driver_Follower>(FindObjectsSortMode.None);
-            if (drivers.Length > 0)
-            {
-                allCars.Clear();
-                foreach (var d in drivers) allCars.Add(d.transform);
-                targetCar = allCars[0];
-            }
+            RefreshTargets();
             return;
         }
 
         if (Input.GetKeyDown(switchCarKey))
         {
+            if (allCars.Count == 0)
+            {
+                RefreshTargets();
+            }
+
+            if (allCars.Count == 0)
+            {
+                return;
+            }
+
             currentCarIndex = (currentCarIndex + 1) % allCars.Count;
             targetCar = allCars[currentCarIndex];
         }
 
         if (Input.GetKeyDown(switchCameraModeKey))
         {
-            cameraMode = cameraMode == CameraMode.TopDown ? CameraMode.Chase : CameraMode.TopDown;
+            cameraMode = GetNextCameraMode(cameraMode);
         }
 
         if (cameraMode == CameraMode.TopDown)
@@ -58,7 +62,7 @@ public class F1_TopDownCamera : MonoBehaviour
         }
         else
         {
-            UpdateChaseView();
+            UpdateChaseWorldView();
         }
     }
 
@@ -69,14 +73,49 @@ public class F1_TopDownCamera : MonoBehaviour
         transform.rotation = Quaternion.Euler(90f, 0f, 0f);
     }
 
-    void UpdateChaseView()
+    void UpdateChaseWorldView()
     {
-        Vector3 rotatedOffset = targetCar.rotation * chaseOffset;
-        Vector3 desiredPosition = targetCar.position + rotatedOffset;
+        Vector3 desiredPosition = targetCar.position + chaseWorldOffset;
         transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * followSmoothness);
 
         Vector3 lookTarget = targetCar.position + Vector3.up * chaseLookAtHeight;
         Quaternion desiredRotation = Quaternion.LookRotation(lookTarget - transform.position, Vector3.up);
         transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, Time.deltaTime * rotationSmoothness);
+    }
+
+    CameraMode GetNextCameraMode(CameraMode currentMode)
+    {
+        if (currentMode == CameraMode.TopDown)
+        {
+            return CameraMode.ChaseWorld;
+        }
+
+        return CameraMode.TopDown;
+    }
+
+    void RefreshTargets()
+    {
+        allCars.Clear();
+
+        F1_Driver_Follower[] drivers = Object.FindObjectsByType<F1_Driver_Follower>(FindObjectsSortMode.None);
+        foreach (var driver in drivers)
+        {
+            allCars.Add(driver.transform);
+        }
+
+        if (allCars.Count == 0)
+        {
+            CSVMovementPlayer[] singleCarPlayers = Object.FindObjectsByType<CSVMovementPlayer>(FindObjectsSortMode.None);
+            foreach (var player in singleCarPlayers)
+            {
+                allCars.Add(player.transform);
+            }
+        }
+
+        if (allCars.Count > 0)
+        {
+            currentCarIndex = Mathf.Clamp(currentCarIndex, 0, allCars.Count - 1);
+            targetCar = allCars[currentCarIndex];
+        }
     }
 }

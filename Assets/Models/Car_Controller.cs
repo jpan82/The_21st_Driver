@@ -14,6 +14,8 @@ public class F1_Driver_Follower : MonoBehaviour
 
     public float speedMultiplier = 0.5f;
     public float carVerticalOffset = 0.2f;
+    public float rotationSmoothness = 10f;
+    public float lineSampleTimeStep = 0.05f;
 
     private TrajectorySampler sampler;
     private float replayTimeSeconds;
@@ -43,7 +45,8 @@ public class F1_Driver_Follower : MonoBehaviour
         Vector3 forward = sampler.SampleForward(clampedReplayTime);
         if (forward.sqrMagnitude > 0.0001f)
         {
-            transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
+            Quaternion targetRotation = Quaternion.LookRotation(forward, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSmoothness);
         }
 
         if (replayTimeSeconds >= replayEndTimeSeconds)
@@ -60,6 +63,8 @@ public class F1_Driver_Follower : MonoBehaviour
             return;
         }
 
+        sampler = new TrajectorySampler(track);
+
         LineRenderer lr = gameObject.AddComponent<LineRenderer>();
         lr.startWidth = lr.endWidth = racingLineWidth;
         lr.material = new Material(Shader.Find("Sprites/Default"));
@@ -67,16 +72,14 @@ public class F1_Driver_Follower : MonoBehaviour
         lr.alignment = LineAlignment.View;
         lr.sortingOrder = -1;
 
-        List<Vector3> points = new List<Vector3>();
-        foreach (ReplaySample sample in track.samples)
+        List<Vector3> points = sampler.BuildSampledPath(lineSampleTimeStep);
+        for (int i = 0; i < points.Count; i++)
         {
-            Vector3 p = sample.worldPosition + new Vector3(0f, uniqueYOffset, 0f);
-            points.Add(p);
+            points[i] += new Vector3(0f, uniqueYOffset, 0f);
         }
         lr.positionCount = points.Count;
         lr.SetPositions(points.ToArray());
 
-        sampler = new TrajectorySampler(track);
         replayTimeSeconds = sampler.StartTime;
         replayEndTimeSeconds = sampler.EndTime;
         isPlaying = true;

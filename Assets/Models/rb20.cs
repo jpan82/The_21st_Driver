@@ -13,15 +13,21 @@ public class CSVMovementPlayer : MonoBehaviour
     [Header("Track Visuals")]
     public Color trackColor = new Color(0.2f, 0.2f, 0.2f, 1.0f); 
     public float trackWidth = 15f; 
+    public float lineSampleTimeStep = 0.05f;
     
     [Header("Overlap Fix")]
     [Tooltip("Raise the car slightly so it doesn't clip through the track.")]
     public float carVerticalOffset = 0.2f; 
     public float fixedXRotation = -90f;
+    public float rotationSmoothness = 10f;
 
     private string filePath;
     private LineRenderer trackLine;
     private DriverReplayTrack replayTrack;
+    private TrajectorySampler sampler;
+    private float replayTimeSeconds;
+    private float replayEndTimeSeconds;
+    private bool isPlaying;
 
     void Start()
     {
@@ -37,59 +43,78 @@ public class CSVMovementPlayer : MonoBehaviour
 
         if (GetComponent<Rigidbody>()) GetComponent<Rigidbody>().isKinematic = true;
 
-        StartCoroutine(ExecuteRaceSequence());
+        InitializeReplay();
     }
 
-    IEnumerator ExecuteRaceSequence()
+    void Update()
+    {
+        if (!isPlaying || sampler == null || !sampler.IsValid)
+        {
+            return;
+        }
+
+        replayTimeSeconds += Time.deltaTime * speedMultiplier;
+        float clampedReplayTime = Mathf.Min(replayTimeSeconds, replayEndTimeSeconds);
+
+        Vector3 sampledPosition = sampler.SamplePosition(clampedReplayTime);
+        sampledPosition.y += carVerticalOffset;
+        transform.position = sampledPosition;
+
+        Vector3 forward = sampler.SampleForward(clampedReplayTime);
+        if (forward.sqrMagnitude > 0.0001f)
+        {
+            Quaternion lookRot = Quaternion.LookRotation(forward, Vector3.up);
+            Quaternion targetRotation = Quaternion.Euler(fixedXRotation, lookRot.eulerAngles.y, 0f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSmoothness);
+        }
+
+        if (replayTimeSeconds >= replayEndTimeSeconds)
+        {
+            isPlaying = false;
+        }
+    }
+
+    void InitializeReplay()
     {
         replayTrack = FastF1CsvImporter.LoadTrackFromFile(filePath);
-        if (replayTrack.samples.Count < 2) yield break;
+        if (replayTrack.samples.Count < 2)
+        {
+            return;
+        }
 
+        sampler = new TrajectorySampler(replayTrack);
         DrawFullTrack(replayTrack);
+        replayTimeSeconds = sampler.StartTime;
+        replayEndTimeSeconds = sampler.EndTime;
+        isPlaying = true;
 
-        transform.position = Vector3.up * carVerticalOffset;
-        yield return new WaitForSeconds(1.5f); 
+        Vector3 startPosition = sampler.SamplePosition(replayTimeSeconds);
+        startPosition.y += carVerticalOffset;
+        transform.position = startPosition;
 
-        yield return StartCoroutine(MoveCar(replayTrack));
+        Vector3 startForward = sampler.SampleForward(replayTimeSeconds);
+        if (startForward.sqrMagnitude > 0.0001f)
+        {
+            Quaternion lookRot = Quaternion.LookRotation(startForward, Vector3.up);
+            transform.rotation = Quaternion.Euler(fixedXRotation, lookRot.eulerAngles.y, 0f);
+        }
     }
 
     void DrawFullTrack(DriverReplayTrack track)
     {
-        List<Vector3> allPoints = new List<Vector3>();
-        foreach (ReplaySample sample in track.samples)
+        List<Vector3> allPoints = sampler != null && sampler.IsValid
+            ? sampler.BuildSampledPath(lineSampleTimeStep)
+            : new List<Vector3>();
+
+        if (allPoints.Count == 0)
         {
-            allPoints.Add(sample.worldPosition);
+            foreach (ReplaySample sample in track.samples)
+            {
+                allPoints.Add(sample.worldPosition);
+            }
         }
+
         trackLine.positionCount = allPoints.Count;
         trackLine.SetPositions(allPoints.ToArray());
-    }
-
-    IEnumerator MoveCar(DriverReplayTrack track)
-    {
-        for (int i = 0; i < track.samples.Count - 1; i++)
-        {
-            ReplaySample cur = track.samples[i];
-            ReplaySample next = track.samples[i + 1];
-
-            Vector3 startPos = cur.worldPosition + Vector3.up * carVerticalOffset;
-            Vector3 endPos = next.worldPosition + Vector3.up * carVerticalOffset;
-
-            float duration = (next.sessionTimeSeconds - cur.sessionTimeSeconds) / speedMultiplier;
-
-            Vector3 moveDir = (endPos - startPos).normalized;
-            if (moveDir != Vector3.zero)
-            {
-                Quaternion lookRot = Quaternion.LookRotation(moveDir, Vector3.up);
-                transform.rotation = Quaternion.Euler(fixedXRotation, lookRot.eulerAngles.y, 0f);
-            }
-
-            float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                elapsed += Time.deltaTime;
-                transform.position = Vector3.Lerp(startPos, endPos, elapsed / duration);
-                yield return null;
-            }
-        }
     }
 }

@@ -1,7 +1,11 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class TrajectorySampler
 {
+    private const float CentripetalAlpha = 0.5f;
+    private const float MinParameterStep = 0.0001f;
+
     private readonly DriverReplayTrack track;
     private int lastSegmentIndex;
 
@@ -28,7 +32,7 @@ public class TrajectorySampler
         Vector3 p1 = current.worldPosition;
         Vector3 p2 = next.worldPosition;
         Vector3 p3 = GetSamplePosition(segmentIndex + 2);
-        return CatmullRom(p0, p1, p2, p3, t);
+        return CentripetalCatmullRom(p0, p1, p2, p3, t);
     }
 
     public Vector3 SampleForward(float sessionTimeSeconds)
@@ -42,7 +46,7 @@ public class TrajectorySampler
         Vector3 p1 = current.worldPosition;
         Vector3 p2 = next.worldPosition;
         Vector3 p3 = GetSamplePosition(segmentIndex + 2);
-        Vector3 direction = CatmullRomTangent(p0, p1, p2, p3, t);
+        Vector3 direction = CentripetalCatmullRomTangent(p0, p1, p2, p3, t);
         direction.y = 0f;
 
         if (direction.sqrMagnitude > 0.0001f)
@@ -52,6 +56,27 @@ public class TrajectorySampler
 
         Quaternion fallbackRotation = Quaternion.Euler(0f, current.headingYawDegrees, 0f);
         return fallbackRotation * Vector3.forward;
+    }
+
+    public List<Vector3> BuildSampledPath(float timeStepSeconds)
+    {
+        List<Vector3> points = new List<Vector3>();
+        if (!IsValid)
+        {
+            return points;
+        }
+
+        float safeTimeStep = Mathf.Max(0.01f, timeStepSeconds);
+        float currentTime = StartTime;
+
+        while (currentTime < EndTime)
+        {
+            points.Add(SamplePosition(currentTime));
+            currentTime += safeTimeStep;
+        }
+
+        points.Add(SamplePosition(EndTime));
+        return points;
     }
 
     private bool TryGetInterpolatedSample(float sessionTimeSeconds, out int segmentIndex, out ReplaySample current, out ReplaySample next, out float t)
@@ -146,27 +171,54 @@ public class TrajectorySampler
         return track.samples[clampedIndex].worldPosition;
     }
 
-    private static Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    private static Vector3 CentripetalCatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
     {
-        float t2 = t * t;
-        float t3 = t2 * t;
+        GetCurveParameters(p0, p1, p2, p3, out float t0, out float t1, out float t2, out float t3);
 
-        return 0.5f * (
-            (2f * p1) +
-            (-p0 + p2) * t +
-            (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
-            (-p0 + 3f * p1 - 3f * p2 + p3) * t3
-        );
+        float curveTime = Mathf.Lerp(t1, t2, t);
+        Vector3 a1 = InterpolateSafe(p0, p1, t0, t1, curveTime);
+        Vector3 a2 = InterpolateSafe(p1, p2, t1, t2, curveTime);
+        Vector3 a3 = InterpolateSafe(p2, p3, t2, t3, curveTime);
+
+        Vector3 b1 = InterpolateSafe(a1, a2, t0, t2, curveTime);
+        Vector3 b2 = InterpolateSafe(a2, a3, t1, t3, curveTime);
+
+        return InterpolateSafe(b1, b2, t1, t2, curveTime);
     }
 
-    private static Vector3 CatmullRomTangent(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    private static Vector3 CentripetalCatmullRomTangent(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
     {
-        float t2 = t * t;
+        float sampleBefore = Mathf.Clamp01(t - 0.01f);
+        float sampleAfter = Mathf.Clamp01(t + 0.01f);
+        Vector3 before = CentripetalCatmullRom(p0, p1, p2, p3, sampleBefore);
+        Vector3 after = CentripetalCatmullRom(p0, p1, p2, p3, sampleAfter);
+        return after - before;
+    }
 
-        return 0.5f * (
-            (-p0 + p2) +
-            2f * (2f * p0 - 5f * p1 + 4f * p2 - p3) * t +
-            3f * (-p0 + 3f * p1 - 3f * p2 + p3) * t2
-        );
+    private static void GetCurveParameters(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, out float t0, out float t1, out float t2, out float t3)
+    {
+        t0 = 0f;
+        t1 = GetNextParameter(t0, p0, p1);
+        t2 = GetNextParameter(t1, p1, p2);
+        t3 = GetNextParameter(t2, p2, p3);
+    }
+
+    private static float GetNextParameter(float currentParameter, Vector3 from, Vector3 to)
+    {
+        float distance = Vector3.Distance(from, to);
+        float step = Mathf.Pow(distance, CentripetalAlpha);
+        return currentParameter + Mathf.Max(step, MinParameterStep);
+    }
+
+    private static Vector3 InterpolateSafe(Vector3 a, Vector3 b, float ta, float tb, float t)
+    {
+        float denominator = tb - ta;
+        if (denominator <= Mathf.Epsilon)
+        {
+            return b;
+        }
+
+        float lerpT = Mathf.Clamp01((t - ta) / denominator);
+        return Vector3.Lerp(a, b, lerpT);
     }
 }

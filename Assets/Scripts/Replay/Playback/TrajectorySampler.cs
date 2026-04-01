@@ -19,22 +19,30 @@ public class TrajectorySampler
 
     public Vector3 SamplePosition(float sessionTimeSeconds)
     {
-        if (!TryGetInterpolatedSample(sessionTimeSeconds, out ReplaySample current, out ReplaySample next, out float t))
+        if (!TryGetInterpolatedSample(sessionTimeSeconds, out int segmentIndex, out ReplaySample current, out ReplaySample next, out float t))
         {
             return Vector3.zero;
         }
 
-        return Vector3.Lerp(current.worldPosition, next.worldPosition, t);
+        Vector3 p0 = GetSamplePosition(segmentIndex - 1);
+        Vector3 p1 = current.worldPosition;
+        Vector3 p2 = next.worldPosition;
+        Vector3 p3 = GetSamplePosition(segmentIndex + 2);
+        return CatmullRom(p0, p1, p2, p3, t);
     }
 
     public Vector3 SampleForward(float sessionTimeSeconds)
     {
-        if (!TryGetInterpolatedSample(sessionTimeSeconds, out ReplaySample current, out ReplaySample next, out _))
+        if (!TryGetInterpolatedSample(sessionTimeSeconds, out int segmentIndex, out ReplaySample current, out ReplaySample next, out float t))
         {
             return Vector3.forward;
         }
 
-        Vector3 direction = next.worldPosition - current.worldPosition;
+        Vector3 p0 = GetSamplePosition(segmentIndex - 1);
+        Vector3 p1 = current.worldPosition;
+        Vector3 p2 = next.worldPosition;
+        Vector3 p3 = GetSamplePosition(segmentIndex + 2);
+        Vector3 direction = CatmullRomTangent(p0, p1, p2, p3, t);
         direction.y = 0f;
 
         if (direction.sqrMagnitude > 0.0001f)
@@ -46,8 +54,9 @@ public class TrajectorySampler
         return fallbackRotation * Vector3.forward;
     }
 
-    private bool TryGetInterpolatedSample(float sessionTimeSeconds, out ReplaySample current, out ReplaySample next, out float t)
+    private bool TryGetInterpolatedSample(float sessionTimeSeconds, out int segmentIndex, out ReplaySample current, out ReplaySample next, out float t)
     {
+        segmentIndex = 0;
         current = null;
         next = null;
         t = 0f;
@@ -59,6 +68,7 @@ public class TrajectorySampler
 
         if (sessionTimeSeconds <= StartTime)
         {
+            segmentIndex = 0;
             current = track.samples[0];
             next = track.samples[1];
             return true;
@@ -67,13 +77,14 @@ public class TrajectorySampler
         if (sessionTimeSeconds >= EndTime)
         {
             int lastIndex = track.samples.Count - 1;
+            segmentIndex = lastIndex - 1;
             current = track.samples[lastIndex - 1];
             next = track.samples[lastIndex];
             t = 1f;
             return true;
         }
 
-        int segmentIndex = Mathf.Clamp(lastSegmentIndex, 0, track.samples.Count - 2);
+        segmentIndex = Mathf.Clamp(lastSegmentIndex, 0, track.samples.Count - 2);
         if (!IsTimeWithinSegment(sessionTimeSeconds, segmentIndex))
         {
             segmentIndex = FindSegmentIndex(sessionTimeSeconds);
@@ -127,5 +138,35 @@ public class TrajectorySampler
         }
 
         return Mathf.Clamp(low, 0, track.samples.Count - 2);
+    }
+
+    private Vector3 GetSamplePosition(int index)
+    {
+        int clampedIndex = Mathf.Clamp(index, 0, track.samples.Count - 1);
+        return track.samples[clampedIndex].worldPosition;
+    }
+
+    private static Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    {
+        float t2 = t * t;
+        float t3 = t2 * t;
+
+        return 0.5f * (
+            (2f * p1) +
+            (-p0 + p2) * t +
+            (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+            (-p0 + 3f * p1 - 3f * p2 + p3) * t3
+        );
+    }
+
+    private static Vector3 CatmullRomTangent(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    {
+        float t2 = t * t;
+
+        return 0.5f * (
+            (-p0 + p2) +
+            2f * (2f * p0 - 5f * p1 + 4f * p2 - p3) * t +
+            3f * (-p0 + 3f * p1 - 3f * p2 + p3) * t2
+        );
     }
 }

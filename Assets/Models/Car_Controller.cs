@@ -15,16 +15,50 @@ public class F1_Driver_Follower : MonoBehaviour
     public float speedMultiplier = 0.5f;
     public float carVerticalOffset = 0.2f;
 
+    private TrajectorySampler sampler;
+    private float replayTimeSeconds;
+    private float replayEndTimeSeconds;
+    private bool isPlaying;
+
     void Start()
     {
         if (GetComponent<Rigidbody>()) GetComponent<Rigidbody>().isKinematic = true;
-        StartCoroutine(DriveSequence());
+        InitializeReplay();
     }
 
-    IEnumerator DriveSequence()
+    void Update()
+    {
+        if (!isPlaying || sampler == null || !sampler.IsValid)
+        {
+            return;
+        }
+
+        replayTimeSeconds += Time.deltaTime * speedMultiplier;
+        float clampedReplayTime = Mathf.Min(replayTimeSeconds, replayEndTimeSeconds);
+
+        Vector3 sampledPosition = sampler.SamplePosition(clampedReplayTime);
+        sampledPosition.y += carVerticalOffset + uniqueYOffset;
+        transform.position = sampledPosition;
+
+        Vector3 forward = sampler.SampleForward(clampedReplayTime);
+        if (forward.sqrMagnitude > 0.0001f)
+        {
+            transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
+        }
+
+        if (replayTimeSeconds >= replayEndTimeSeconds)
+        {
+            isPlaying = false;
+        }
+    }
+
+    void InitializeReplay()
     {
         DriverReplayTrack track = LoadTrackIfNeeded();
-        if (track == null || track.samples.Count < 2) yield break;
+        if (track == null || track.samples.Count < 2)
+        {
+            return;
+        }
 
         LineRenderer lr = gameObject.AddComponent<LineRenderer>();
         lr.startWidth = lr.endWidth = racingLineWidth;
@@ -42,29 +76,19 @@ public class F1_Driver_Follower : MonoBehaviour
         lr.positionCount = points.Count;
         lr.SetPositions(points.ToArray());
 
-        for (int i = 0; i < track.samples.Count - 1; i++)
+        sampler = new TrajectorySampler(track);
+        replayTimeSeconds = sampler.StartTime;
+        replayEndTimeSeconds = sampler.EndTime;
+        isPlaying = true;
+
+        Vector3 startPosition = sampler.SamplePosition(replayTimeSeconds);
+        startPosition.y += carVerticalOffset + uniqueYOffset;
+        transform.position = startPosition;
+
+        Vector3 startForward = sampler.SampleForward(replayTimeSeconds);
+        if (startForward.sqrMagnitude > 0.0001f)
         {
-            ReplaySample cur = track.samples[i];
-            ReplaySample nxt = track.samples[i + 1];
-
-            Vector3 startPos = cur.worldPosition + new Vector3(0f, carVerticalOffset + uniqueYOffset, 0f);
-            Vector3 endPos = nxt.worldPosition + new Vector3(0f, carVerticalOffset + uniqueYOffset, 0f);
-            float duration = (nxt.sessionTimeSeconds - cur.sessionTimeSeconds) / speedMultiplier;
-
-            if (duration > 0)
-            {
-                Vector3 dir = endPos - startPos;
-                dir.y = 0;
-                if (dir.magnitude > 0.05f) transform.rotation = Quaternion.LookRotation(dir.normalized);
-
-                float elapsed = 0;
-                while (elapsed < duration)
-                {
-                    elapsed += Time.deltaTime;
-                    transform.position = Vector3.Lerp(startPos, endPos, elapsed / duration);
-                    yield return null;
-                }
-            }
+            transform.rotation = Quaternion.LookRotation(startForward, Vector3.up);
         }
     }
 

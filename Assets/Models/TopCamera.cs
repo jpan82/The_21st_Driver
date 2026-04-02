@@ -18,6 +18,13 @@ public class F1_TopDownCamera : MonoBehaviour
     public float chaseLookAtHeight = 2.5f;
     public float rotationSmoothness = 6f;
 
+    [Header("距离控制")]
+    public float distanceAdjustSpeed = 50f;
+    public float minTopDownHeight = 50f;
+    public float maxTopDownHeight = 1000f;
+    public float minChaseDistance = 20f;
+    public float maxChaseDistance = 800f;
+
     [Header("输入")]
     public KeyCode switchCarKey = KeyCode.Tab;
     public KeyCode switchCameraModeKey = KeyCode.C;
@@ -56,6 +63,8 @@ public class F1_TopDownCamera : MonoBehaviour
             cameraMode = GetNextCameraMode(cameraMode);
         }
 
+        HandleDistanceInput();
+
         if (cameraMode == CameraMode.TopDown)
         {
             UpdateTopDownView();
@@ -81,6 +90,26 @@ public class F1_TopDownCamera : MonoBehaviour
         Vector3 lookTarget = targetCar.position + Vector3.up * chaseLookAtHeight;
         Quaternion desiredRotation = Quaternion.LookRotation(lookTarget - transform.position, Vector3.up);
         transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, Time.deltaTime * rotationSmoothness);
+    }
+
+    void HandleDistanceInput()
+    {
+        float input = 0f;
+        if (Input.GetKey(KeyCode.UpArrow))   input = -1f;
+        if (Input.GetKey(KeyCode.DownArrow)) input =  1f;
+        if (input == 0f) return;
+
+        float delta = input * distanceAdjustSpeed * Time.deltaTime;
+
+        if (cameraMode == CameraMode.TopDown)
+        {
+            cameraFixedHeight = Mathf.Clamp(cameraFixedHeight + delta, minTopDownHeight, maxTopDownHeight);
+        }
+        else
+        {
+            float scale = Mathf.Clamp(chaseWorldOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
+            chaseWorldOffset = chaseWorldOffset.normalized * scale;
+        }
     }
 
     CameraMode GetNextCameraMode(CameraMode currentMode)

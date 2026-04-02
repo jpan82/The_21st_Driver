@@ -70,7 +70,7 @@ public class Race_Controller : MonoBehaviour
     }
 
     void Start() {
-		carYOffset = 0.4f;
+		carYOffset = 1f;
         string tPath = Path.Combine(Application.streamingAssetsPath, trackFolder, trackFileName);
         string cDirPath = Path.Combine(Application.streamingAssetsPath, carFolder);
 

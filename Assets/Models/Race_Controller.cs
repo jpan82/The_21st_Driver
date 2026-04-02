@@ -1,44 +1,175 @@
-using System.IO;
 using UnityEngine;
+using System.Collections.Generic;
+using System.IO;
+using System.Globalization;
 
-public class F1_RaceManager : MonoBehaviour
+public class Race_Controller : MonoBehaviour
 {
+    [Header("Assets")]
     public GameObject carPrefab;
-    public string folderName = "f1_motion_dump";
 
-    public float speedMultiplier = 0.5f;
-    public float trackWidth = 20f;
-    public Color trackColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+    [Header("Settings")]
+    public float playbackSpeed = 90f; 
+    public string trackFolder = "track_data";
+    public string trackFileName = "Silverstone.csv";
+    public string carFolder = "f1_motion_dump";
+    
+    [Header("Car Alignment")]
+    [Tooltip("Lifts the car vertically. Set to 1.0 as requested.")]
+    public float carYOffset = 1.0f; 
 
-    void Start()
-    {
-        if (carPrefab == null) {
-            return;
+    [Header("Camera Settings")]
+    public float followHeight = 5f;
+    public float followDistance = 15f;
+    public float cameraFOV = 80f;
+
+    private Vector3 globalOffset;
+    private List<Transform> spawnedCars = new List<Transform>();
+    private int currentFollowIndex = 0;
+    private bool isFollowing = false;
+
+    // DATA
+    [System.Serializable]
+    public class CarPathData {
+        public List<Vector3> positions = new List<Vector3>();
+        public static CarPathData Load(string path, Vector3 offset, float yLift) {
+            CarPathData data = new CarPathData();
+            if (!File.Exists(path)) return data;
+            string[] lines = File.ReadAllLines(path);
+            
+            for (int i = 1; i < lines.Length; i++) {
+                string[] cols = lines[i].Split(',');
+                if (cols.Length < 7) continue;
+
+                float x = float.Parse(cols[5], CultureInfo.InvariantCulture);
+                float z = float.Parse(cols[6], CultureInfo.InvariantCulture);
+                
+                float altitude = 0f;
+                if (cols.Length > 7) {
+                    altitude = float.Parse(cols[7], CultureInfo.InvariantCulture);
+                }
+
+                // Unity Position: [X, Altitude + 1.0, Z]
+                data.positions.Add(new Vector3(x, altitude + yLift, z) + offset);
+            }
+            return data;
+        }
+    }
+
+    // Mover
+    public class ReferenceCarMover : MonoBehaviour {
+        public List<Vector3> path; public float speed; private int index = 0;
+        void Update() {
+            if (path == null || index >= path.Count - 1) return;
+            transform.position = Vector3.MoveTowards(transform.position, path[index + 1], speed * Time.deltaTime);
+            
+            Vector3 dir = path[index + 1] - transform.position;
+            if (dir.sqrMagnitude > 0.001f) transform.rotation = Quaternion.LookRotation(dir);
+            if (Vector3.Distance(transform.position, path[index + 1]) < 0.1f) index++;
+        }
+    }
+
+    void Start() {
+		carYOffset = 0.4f;
+        string tPath = Path.Combine(Application.streamingAssetsPath, trackFolder, trackFileName);
+        string cDirPath = Path.Combine(Application.streamingAssetsPath, carFolder);
+
+        if (!File.Exists(tPath)) return;
+
+        string[] lines = File.ReadAllLines(tPath);
+        globalOffset = -new Vector3(float.Parse(lines[1].Split(',')[0], CultureInfo.InvariantCulture), 0, float.Parse(lines[1].Split(',')[1], CultureInfo.InvariantCulture));
+
+        BuildTrack(lines);
+        SetupInitialCamera();
+
+        if (Directory.Exists(cDirPath)) {
+            string[] carFiles = Directory.GetFiles(cDirPath, "*.csv");
+            foreach (string file in carFiles) {
+                SpawnCar(file);
+            }
+        }
+    }
+
+    void Update() {
+        // Toggle following with 'C'
+        if (Input.GetKeyDown(KeyCode.C)) {
+            if (!isFollowing) isFollowing = true;
+            else {
+                currentFollowIndex++;
+                if (currentFollowIndex >= spawnedCars.Count) {
+                    isFollowing = false;
+                    currentFollowIndex = 0;
+                    SetupInitialCamera();
+                }
+            }
         }
 
-        string path = Path.Combine(Application.streamingAssetsPath, folderName);
-        ReplaySession session = FastF1CsvImporter.LoadSessionFromFolder(path);
-        if (session.tracks.Count == 0)
-        {
-            return;
+        if (isFollowing && spawnedCars.Count > 0) {
+            Transform target = spawnedCars[currentFollowIndex];
+            Camera.main.fieldOfView = cameraFOV;
+            Vector3 targetPos = target.position + target.TransformDirection(new Vector3(0, followHeight, -followDistance));
+            Camera.main.transform.position = Vector3.Lerp(Camera.main.transform.position, targetPos, Time.deltaTime * 10f);
+            Camera.main.transform.LookAt(target.position + Vector3.up * 1.5f);
         }
+    }
 
-        for (int carIndex = 0; carIndex < session.tracks.Count; carIndex++)
-        {
-            // int carIndex = 0;
-            DriverReplayTrack track = session.tracks[carIndex];
+    void BuildTrack(string[] lines) {
+        Mesh mesh = new Mesh();
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; 
 
-            GameObject car = Instantiate(carPrefab);
-            car.name = track.driverId;
+        List<Vector3> verts = new List<Vector3>();
+        List<int> tris = new List<int>();
 
-            F1_Driver_Follower driver = car.GetComponent<F1_Driver_Follower>();
-            if (driver == null) driver = car.AddComponent<F1_Driver_Follower>();
+        for (int i = 1; i < lines.Length; i++) {
+            string[] c = lines[i].Split(',');
+            if (c.Length < 4) continue;
+            Vector3 center = new Vector3(float.Parse(c[0], CultureInfo.InvariantCulture), 0, float.Parse(c[1], CultureInfo.InvariantCulture)) + globalOffset;
+            
+            Vector3 forward = Vector3.forward;
+            if (i < lines.Length - 1) {
+                Vector3 next = new Vector3(float.Parse(lines[i+1].Split(',')[0], CultureInfo.InvariantCulture), 0, float.Parse(lines[i+1].Split(',')[1], CultureInfo.InvariantCulture)) + globalOffset;
+                forward = (next - center).normalized;
+            }
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
 
-            driver.replayTrack = track;
-            driver.speedMultiplier = speedMultiplier;
-            driver.uniqueYOffset = carIndex * 0.01f;
-            driver.racingLineWidth = trackWidth;
-            driver.pathColor = trackColor;
+            verts.Add(center + right * float.Parse(c[2], CultureInfo.InvariantCulture)); 
+            verts.Add(center - right * float.Parse(c[3], CultureInfo.InvariantCulture)); 
+
+            if (i > 1) {
+                int v = verts.Count - 4;
+                tris.Add(v); tris.Add(v + 1); tris.Add(v + 2);
+                tris.Add(v + 1); tris.Add(v + 3); tris.Add(v + 2);
+            }
         }
+        mesh.vertices = verts.ToArray();
+        mesh.triangles = tris.ToArray();
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        GameObject obj = new GameObject("Silverstone_Track");
+        obj.AddComponent<MeshFilter>().mesh = mesh;
+        MeshRenderer mr = obj.AddComponent<MeshRenderer>();
+        mr.material = new Material(Shader.Find("Unlit/Color"));
+        mr.material.color = Color.grey;
+    }
+
+    void SetupInitialCamera() {
+        Camera.main.farClipPlane = 10000f;
+        Camera.main.transform.position = new Vector3(0, 100, -50);
+        Camera.main.transform.rotation = Quaternion.Euler(60, 0, 0);
+    }
+
+    void SpawnCar(string path) {
+        CarPathData data = CarPathData.Load(path, globalOffset, carYOffset);
+        if (data.positions.Count == 0 || carPrefab == null) return;
+		
+        GameObject car = Instantiate(carPrefab);
+        car.name = Path.GetFileNameWithoutExtension(path);
+        spawnedCars.Add(car.transform);
+        
+        var mover = car.AddComponent<ReferenceCarMover>();
+        mover.path = data.positions;
+        mover.speed = playbackSpeed;
+        car.transform.position = data.positions[0];
     }
 }

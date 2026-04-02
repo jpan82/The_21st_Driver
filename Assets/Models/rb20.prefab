@@ -100,7 +100,7 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -6689036041284674117, guid: b39f234925cbe4a7e9c1b54df167db9c,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: -5039131814102910120}
+      addedObject: {fileID: -4416627280662912959}
     - targetCorrespondingSourceObject: {fileID: 2484665033948473043, guid: b39f234925cbe4a7e9c1b54df167db9c,
         type: 3}
       insertIndex: -1
@@ -111,25 +111,13 @@ PrefabInstance:
       addedObject: {fileID: 661646937295817825}
   m_SourcePrefab: {fileID: -5645937942226959685, guid: b39f234925cbe4a7e9c1b54df167db9c,
     type: 3}
---- !u!4 &371328152456587192 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: -7345735705098178231, guid: b39f234925cbe4a7e9c1b54df167db9c,
-    type: 3}
-  m_PrefabInstance: {fileID: 2245480607196829425}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &2941373711464187876 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: -5190302391689277163, guid: b39f234925cbe4a7e9c1b54df167db9c,
-    type: 3}
-  m_PrefabInstance: {fileID: 2245480607196829425}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &4324099535192181578 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -6689036041284674117, guid: b39f234925cbe4a7e9c1b54df167db9c,
     type: 3}
   m_PrefabInstance: {fileID: 2245480607196829425}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &-5039131814102910120
+--- !u!114 &-4416627280662912959
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -142,17 +130,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   visualRoot: {fileID: 8323852836184495313}
-  frontLeftSteerPivot: {fileID: 5750786929423907689}
-  frontRightSteerPivot: {fileID: 4694860926145068635}
-  frontLeftWheel: {fileID: 2941373711464187876}
-  frontRightWheel: {fileID: 371328152456587192}
-  rearLeftWheel: {fileID: 9008785692123783458}
-  rearRightWheel: {fileID: 8322743103035680529}
+  frontLeftSteerPivot: {fileID: 0}
+  frontRightSteerPivot: {fileID: 0}
+  frontLeftWheel: {fileID: 0}
+  frontRightWheel: {fileID: 0}
+  rearLeftWheel: {fileID: 0}
+  rearRightWheel: {fileID: 0}
+  combinedWheelMesh: {fileID: 8090915278220527280}
   enableWheelSpin: 1
   wheelRadius: 0.33
   wheelSpinAxis: {x: 1, y: 0, z: 0}
   wheelSpinMultiplier: 1
-  enableSteering: 1
+  enableSteering: 0
   steerSensitivity: 0.35
   maxSteerAngle: 24
   steerSmoothness: 8
@@ -218,33 +207,15 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!4 &4694860926145068635 stripped
+--- !u!4 &8090915278220527280 stripped
 Transform:
-  m_CorrespondingSourceObject: {fileID: 6777622307717392554, guid: b39f234925cbe4a7e9c1b54df167db9c,
-    type: 3}
-  m_PrefabInstance: {fileID: 2245480607196829425}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &5750786929423907689 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 5829745380886818200, guid: b39f234925cbe4a7e9c1b54df167db9c,
-    type: 3}
-  m_PrefabInstance: {fileID: 2245480607196829425}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &8322743103035680529 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: -1393338008342040096, guid: b39f234925cbe4a7e9c1b54df167db9c,
+  m_CorrespondingSourceObject: {fileID: -1197614294609211327, guid: b39f234925cbe4a7e9c1b54df167db9c,
     type: 3}
   m_PrefabInstance: {fileID: 2245480607196829425}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &8323852836184495313 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7831136030716150304, guid: b39f234925cbe4a7e9c1b54df167db9c,
-    type: 3}
-  m_PrefabInstance: {fileID: 2245480607196829425}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &9008785692123783458 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: -2149291880077707309, guid: b39f234925cbe4a7e9c1b54df167db9c,
     type: 3}
   m_PrefabInstance: {fileID: 2245480607196829425}
   m_PrefabAsset: {fileID: 0}

@@ -28,6 +28,7 @@ public class F1_TopDownCamera : MonoBehaviour
     [Header("输入")]
     public KeyCode switchCarKey = KeyCode.Tab;
     public KeyCode switchCameraModeKey = KeyCode.C;
+    public float orbitSpeed = 60f;
 
     private List<Transform> allCars = new List<Transform>();
     private int currentCarIndex = 0;
@@ -64,6 +65,7 @@ public class F1_TopDownCamera : MonoBehaviour
         }
 
         HandleDistanceInput();
+        HandleOrbitInput();
 
         if (cameraMode == CameraMode.TopDown)
         {
@@ -110,6 +112,17 @@ public class F1_TopDownCamera : MonoBehaviour
             float scale = Mathf.Clamp(chaseWorldOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
             chaseWorldOffset = chaseWorldOffset.normalized * scale;
         }
+    }
+
+    void HandleOrbitInput()
+    {
+        float input = 0f;
+        if (Input.GetKey(KeyCode.LeftArrow))  input = -1f;
+        if (Input.GetKey(KeyCode.RightArrow)) input =  1f;
+        if (input == 0f) return;
+
+        float angle = input * orbitSpeed * Time.deltaTime;
+        chaseWorldOffset = Quaternion.Euler(0f, angle, 0f) * chaseWorldOffset;
     }
 
     CameraMode GetNextCameraMode(CameraMode currentMode)

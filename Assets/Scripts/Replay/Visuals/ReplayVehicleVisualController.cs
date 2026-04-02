@@ -23,6 +23,8 @@ public class ReplayVehicleVisualController : MonoBehaviour
     public float steerSensitivity = 0.35f;
     public float maxSteerAngle = 24f;
     public float steerSmoothness = 8f;
+    [Tooltip("Local axis the steer pivots rotate around. Use Y for RB20, Z for f1_2022_free (GLB Z-up import).")]
+    public Vector3 steerAxis = Vector3.up;
 
     [Header("Body Roll")]
     public bool enableBodyRoll = false;
@@ -72,11 +74,29 @@ public class ReplayVehicleVisualController : MonoBehaviour
         LogAssignedReferences();
     }
 
+    [ContextMenu("Auto Assign F1_2022_Free References")]
+    private void AutoAssignF1_2022_FreeReferences()
+    {
+        visualRoot = FindChildRecursive("GLTF_SceneRootNode");
+        // Cylinder nodes serve as both steer pivot and wheel — frontLeftWheel/frontRightWheel
+        // are left null so ApplyVisuals combines steer + spin into the pivot rotation
+        frontLeftSteerPivot = FindChildRecursive("Cylinder_4");
+        frontRightSteerPivot = FindChildRecursive("Cylinder.007_36");
+        frontLeftWheel = null;
+        frontRightWheel = null;
+        // GLB import is Z-up: Cylinder local Y points along world Z, so steer on Z axis
+        steerAxis = Vector3.forward;
+        rearLeftWheel = FindChildRecursive("Cylinder.006_35");
+        rearRightWheel = FindChildRecursive("Cylinder.001_14");
+
+        CacheBaseRotations();
+        ResetMotionState();
+        LogAssignedReferences();
+    }
+
     public void AutoAssignIfNeeded()
     {
         if (visualRoot != null &&
-            frontLeftSteerPivot != null &&
-            frontRightSteerPivot != null &&
             frontLeftWheel != null &&
             frontRightWheel != null &&
             rearLeftWheel != null &&
@@ -85,19 +105,27 @@ public class ReplayVehicleVisualController : MonoBehaviour
             return;
         }
 
-        AutoAssignRb20References();
+        // Detect f1_2022_free by its unique wheel node name
+        Transform cylinder4 = FindChildRecursive("Cylinder_4");
+        Debug.Log($"[AutoAssign] GameObject='{gameObject.name}' Cylinder_4={(cylinder4 != null ? GetPath(cylinder4) : "NOT FOUND")}", this);
+        if (cylinder4 != null)
+        {
+            AutoAssignF1_2022_FreeReferences();
+        }
+        else
+        {
+            AutoAssignRb20References();
+        }
     }
 
     void LateUpdate()
     {
         Vector3 currentPosition = transform.position;
-        Vector3 currentForward = transform.forward;
-        currentForward.y = 0f;
 
         if (!hasState)
         {
             lastPosition = currentPosition;
-            lastForward = currentForward.sqrMagnitude > 0.0001f ? currentForward.normalized : Vector3.forward;
+            lastForward = Vector3.forward;
             hasState = true;
             ApplyVisuals();
             return;
@@ -106,6 +134,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
         Vector3 delta = currentPosition - lastPosition;
         delta.y = 0f;
         float distanceMoved = delta.magnitude;
+
+        // Derive forward from movement direction — transform.forward is unreliable
+        // when the model is imported with a fixed X rotation (e.g. -90)
+        Vector3 currentForward = distanceMoved > 0.001f ? delta.normalized : lastForward;
         float signedYawDelta = Vector3.SignedAngle(lastForward, currentForward, Vector3.up);
         float deltaTime = Mathf.Max(Time.deltaTime, 0.0001f);
         float yawRate = signedYawDelta / deltaTime;
@@ -145,10 +177,7 @@ public class ReplayVehicleVisualController : MonoBehaviour
         ApplyVisuals();
 
         lastPosition = currentPosition;
-        if (currentForward.sqrMagnitude > 0.0001f)
-        {
-            lastForward = currentForward.normalized;
-        }
+        lastForward = currentForward;
     }
 
     private void CacheBaseRotations()
@@ -177,17 +206,22 @@ public class ReplayVehicleVisualController : MonoBehaviour
             visualRoot.localRotation = visualRootBaseRotation * Quaternion.Euler(0f, 0f, currentBodyRoll);
         }
 
+        Quaternion wheelSpinRotation = Quaternion.AngleAxis(accumulatedWheelSpinDegrees, wheelSpinAxis.normalized);
+        Quaternion steerRotation = Quaternion.AngleAxis(currentSteerAngle, steerAxis.normalized);
+
         if (frontLeftSteerPivot != null)
         {
-            frontLeftSteerPivot.localRotation = frontLeftSteerBaseRotation * Quaternion.Euler(0f, currentSteerAngle, 0f);
+            // If no separate front wheel node, combine steer + spin into the pivot
+            Quaternion fl = frontLeftWheel == null ? steerRotation * wheelSpinRotation : steerRotation;
+            frontLeftSteerPivot.localRotation = frontLeftSteerBaseRotation * fl;
         }
 
         if (frontRightSteerPivot != null)
         {
-            frontRightSteerPivot.localRotation = frontRightSteerBaseRotation * Quaternion.Euler(0f, currentSteerAngle, 0f);
+            Quaternion fr = frontRightWheel == null ? steerRotation * wheelSpinRotation : steerRotation;
+            frontRightSteerPivot.localRotation = frontRightSteerBaseRotation * fr;
         }
 
-        Quaternion wheelSpinRotation = Quaternion.AngleAxis(accumulatedWheelSpinDegrees, wheelSpinAxis.normalized);
         ApplyWheelRotation(frontLeftWheel, frontLeftWheelBaseRotation, wheelSpinRotation);
         ApplyWheelRotation(frontRightWheel, frontRightWheelBaseRotation, wheelSpinRotation);
         ApplyWheelRotation(rearLeftWheel, rearLeftWheelBaseRotation, wheelSpinRotation);

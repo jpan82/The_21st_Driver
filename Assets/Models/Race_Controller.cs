@@ -25,6 +25,7 @@ public class F1_RaceManager : MonoBehaviour
 
         for (int carIndex = 0; carIndex < session.tracks.Count; carIndex++)
         {
+            // int carIndex = 0;
             DriverReplayTrack track = session.tracks[carIndex];
 
             GameObject car = Instantiate(carPrefab);

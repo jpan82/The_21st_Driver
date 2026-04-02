@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028301, g: 0.22571309, b: 0.30692127, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028356, g: 0.2257137, b: 0.3069222, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -152,12 +152,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 735e85fd643724857bdd1b5bdd9e9e51, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  carPrefab: {fileID: 4324099535192181578, guid: 40db22341ba2d4c689b38d3676073742,
+  carPrefab: {fileID: 7845393771176110750, guid: 84e78b1dcfa6440c0a5e7bd84b6e8a47,
     type: 3}
   folderName: f1_motion_dump
   speedMultiplier: 1
+  trackWidth: 60
   trackColor: {r: 0.2, g: 0.2, b: 0.2, a: 1}
-  trackWidth: 130
 --- !u!4 &391485783
 Transform:
   m_ObjectHideFlags: 0
@@ -443,6 +443,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameraFixedHeight: 600
   followSmoothness: 5
+  chaseWorldOffset: {x: 0, y: 130, z: -200}
+  chaseLookAtHeight: 2.5
+  rotationSmoothness: 6
+  distanceAdjustSpeed: 50
+  minTopDownHeight: 50
+  maxTopDownHeight: 1000
+  minChaseDistance: 20
+  maxChaseDistance: 800
+  switchCarKey: 9
+  switchCameraModeKey: 99
+  orbitSpeed: 60
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

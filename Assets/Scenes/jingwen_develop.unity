@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028356, g: 0.2257137, b: 0.3069222, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028301, g: 0.22571309, b: 0.30692127, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -154,15 +154,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   carPrefab: {fileID: 7845393771176110750, guid: 84e78b1dcfa6440c0a5e7bd84b6e8a47,
     type: 3}
-  playbackSpeed: 90
+  trackMaterial: {fileID: 0}
   trackFolder: track_data
   trackFileName: Silverstone.csv
   carFolder: f1_motion_dump
+  baseSpeed: 10
+  speedMultiplier: 5
   carYOffset: 1
-  followHeight: 5
-  followDistance: 15
-  cameraFOV: 80
-  trackMaterial: {fileID: 2100000, guid: 8e4c6a2f91bd4e8ab7c3d50123456ef0, type: 2}
+  rotationSmoothness: 10
+  fixedXRotation: 0
   trackUvMetersPerRepeat: 12
 --- !u!4 &391485783
 Transform:

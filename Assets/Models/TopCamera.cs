@@ -3,18 +3,14 @@ using System.Collections.Generic;
 
 public class F1_TopDownCamera : MonoBehaviour
 {
-    private enum CameraMode
-    {
-        TopDown,
-        ChaseWorld
-    }
+    private enum CameraMode { TopDown, ChaseWorld }
 
     [Header("俯视视角")]
-    public float cameraFixedHeight = 600f;
+    public float cameraFixedHeight = 400f; // Adjusted for better view
     public float followSmoothness = 5f;
 
     [Header("跟车视角")]
-    public Vector3 chaseWorldOffset = new Vector3(0f, 130f, -200f);
+    public Vector3 chaseWorldOffset = new Vector3(0f, 20f, -40f); // Closer for better view
     public float chaseLookAtHeight = 2.5f;
     public float rotationSmoothness = 6f;
 
@@ -45,36 +41,22 @@ public class F1_TopDownCamera : MonoBehaviour
 
         if (Input.GetKeyDown(switchCarKey))
         {
-            if (allCars.Count == 0)
-            {
-                RefreshTargets();
-            }
-
-            if (allCars.Count == 0)
-            {
-                return;
-            }
-
+            RefreshTargets();
+            if (allCars.Count == 0) return;
             currentCarIndex = (currentCarIndex + 1) % allCars.Count;
             targetCar = allCars[currentCarIndex];
         }
 
         if (Input.GetKeyDown(switchCameraModeKey))
         {
-            cameraMode = GetNextCameraMode(cameraMode);
+            cameraMode = (cameraMode == CameraMode.TopDown) ? CameraMode.ChaseWorld : CameraMode.TopDown;
         }
 
         HandleDistanceInput();
         HandleOrbitInput();
 
-        if (cameraMode == CameraMode.TopDown)
-        {
-            UpdateTopDownView();
-        }
-        else
-        {
-            UpdateChaseWorldView();
-        }
+        if (cameraMode == CameraMode.TopDown) UpdateTopDownView();
+        else UpdateChaseWorldView();
     }
 
     void UpdateTopDownView()
@@ -86,6 +68,7 @@ public class F1_TopDownCamera : MonoBehaviour
 
     void UpdateChaseWorldView()
     {
+        // World-space offset based on your request
         Vector3 desiredPosition = targetCar.position + chaseWorldOffset;
         transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * followSmoothness);
 
@@ -102,16 +85,10 @@ public class F1_TopDownCamera : MonoBehaviour
         if (input == 0f) return;
 
         float delta = input * distanceAdjustSpeed * Time.deltaTime;
-
         if (cameraMode == CameraMode.TopDown)
-        {
             cameraFixedHeight = Mathf.Clamp(cameraFixedHeight + delta, minTopDownHeight, maxTopDownHeight);
-        }
         else
-        {
-            float scale = Mathf.Clamp(chaseWorldOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
-            chaseWorldOffset = chaseWorldOffset.normalized * scale;
-        }
+            chaseWorldOffset = chaseWorldOffset.normalized * Mathf.Clamp(chaseWorldOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
     }
 
     void HandleOrbitInput()
@@ -125,34 +102,17 @@ public class F1_TopDownCamera : MonoBehaviour
         chaseWorldOffset = Quaternion.Euler(0f, angle, 0f) * chaseWorldOffset;
     }
 
-    CameraMode GetNextCameraMode(CameraMode currentMode)
-    {
-        if (currentMode == CameraMode.TopDown)
-        {
-            return CameraMode.ChaseWorld;
-        }
-
-        return CameraMode.TopDown;
-    }
-
     void RefreshTargets()
     {
         allCars.Clear();
+        
+        // ADDED THIS LINE: Find the cars from our new Race_Controller
+        SmoothMover[] movers = Object.FindObjectsByType<SmoothMover>(FindObjectsSortMode.None);
+        foreach (var m in movers) allCars.Add(m.transform);
 
-        F1_Driver_Follower[] drivers = Object.FindObjectsByType<F1_Driver_Follower>(FindObjectsSortMode.None);
-        foreach (var driver in drivers)
-        {
-            allCars.Add(driver.transform);
-        }
-
-        if (allCars.Count == 0)
-        {
-            CSVMovementPlayer[] singleCarPlayers = Object.FindObjectsByType<CSVMovementPlayer>(FindObjectsSortMode.None);
-            foreach (var player in singleCarPlayers)
-            {
-                allCars.Add(player.transform);
-            }
-        }
+        // Keep your old search logic for compatibility
+        CSVMovementPlayer[] players = Object.FindObjectsByType<CSVMovementPlayer>(FindObjectsSortMode.None);
+        foreach (var p in players) allCars.Add(p.transform);
 
         if (allCars.Count > 0)
         {

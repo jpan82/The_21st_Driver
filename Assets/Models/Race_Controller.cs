@@ -23,6 +23,11 @@ public class Race_Controller : MonoBehaviour
     public float followDistance = 15f;
     public float cameraFOV = 80f;
 
+    [Header("Track Visual")]
+    [Tooltip("Material with Base Map; if null, use grey Unlit shader.")]
+    public Material trackMaterial;
+    public float trackUvMetersPerRepeat = 12f;
+
     private Vector3 globalOffset;
     private List<Transform> spawnedCars = new List<Transform>();
     private int currentFollowIndex = 0;
@@ -118,7 +123,13 @@ public class Race_Controller : MonoBehaviour
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; 
 
         List<Vector3> verts = new List<Vector3>();
+        List<Vector2> uvs = new List<Vector2>();
         List<int> tris = new List<int>();
+
+        float uAlong = 0f;
+        Vector3 prevCenter = Vector3.zero;
+        bool hasPrevCenter = false;
+        float uScale = 1f / Mathf.Max(0.01f, trackUvMetersPerRepeat);
 
         for (int i = 1; i < lines.Length; i++) {
             string[] c = lines[i].Split(',');
@@ -132,6 +143,16 @@ public class Race_Controller : MonoBehaviour
             }
             Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
 
+            if (hasPrevCenter) {
+                uAlong += Vector3.Distance(prevCenter, center);
+            }
+            prevCenter = center;
+            hasPrevCenter = true;
+
+            float u = uAlong * uScale;
+            uvs.Add(new Vector2(u, 1f));
+            uvs.Add(new Vector2(u, 0f));
+
             verts.Add(center + right * float.Parse(c[2], CultureInfo.InvariantCulture)); 
             verts.Add(center - right * float.Parse(c[3], CultureInfo.InvariantCulture)); 
 
@@ -143,14 +164,28 @@ public class Race_Controller : MonoBehaviour
         }
         mesh.vertices = verts.ToArray();
         mesh.triangles = tris.ToArray();
+        mesh.uv = uvs.ToArray();
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
 
         GameObject obj = new GameObject("Silverstone_Track");
         obj.AddComponent<MeshFilter>().mesh = mesh;
         MeshRenderer mr = obj.AddComponent<MeshRenderer>();
-        mr.material = new Material(Shader.Find("Unlit/Color"));
-        mr.material.color = Color.grey;
+        if (trackMaterial != null) {
+            mr.material = Instantiate(trackMaterial);
+        } else {
+            Shader fallback = Shader.Find("Universal Render Pipeline/Unlit");
+            if (fallback == null) {
+                fallback = Shader.Find("Unlit/Color");
+            }
+            Material m = new Material(fallback);
+            if (fallback.name.Contains("Universal")) {
+                m.SetColor("_BaseColor", Color.grey);
+            } else {
+                m.color = Color.grey;
+            }
+            mr.material = m;
+        }
     }
 
     void SetupInitialCamera() {

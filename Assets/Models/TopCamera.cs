@@ -10,7 +10,7 @@ public class F1_TopDownCamera : MonoBehaviour
     public float followSmoothness = 5f;
 
     [Header("跟车视角")]
-    public Vector3 chaseWorldOffset = new Vector3(0f, 20f, -40f); // Closer for better view
+    public Vector3 chaseLocalOffset = new Vector3(0f, 1f, 3f); // world units: Y=up, Z=behind car
     public float chaseLookAtHeight = 2.5f;
     public float rotationSmoothness = 6f;
 
@@ -29,7 +29,7 @@ public class F1_TopDownCamera : MonoBehaviour
     private List<Transform> allCars = new List<Transform>();
     private int currentCarIndex = 0;
     private Transform targetCar;
-    private CameraMode cameraMode = CameraMode.TopDown;
+    [SerializeField] private CameraMode cameraMode = CameraMode.TopDown;
 
     void LateUpdate()
     {
@@ -68,8 +68,8 @@ public class F1_TopDownCamera : MonoBehaviour
 
     void UpdateChaseWorldView()
     {
-        // World-space offset based on your request
-        Vector3 desiredPosition = targetCar.position + chaseWorldOffset;
+        // Use rotation-only (no scale) so offset values are always in world units
+        Vector3 desiredPosition = targetCar.position + targetCar.rotation * chaseLocalOffset;
         transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * followSmoothness);
 
         Vector3 lookTarget = targetCar.position + Vector3.up * chaseLookAtHeight;
@@ -88,7 +88,7 @@ public class F1_TopDownCamera : MonoBehaviour
         if (cameraMode == CameraMode.TopDown)
             cameraFixedHeight = Mathf.Clamp(cameraFixedHeight + delta, minTopDownHeight, maxTopDownHeight);
         else
-            chaseWorldOffset = chaseWorldOffset.normalized * Mathf.Clamp(chaseWorldOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
+            chaseLocalOffset = chaseLocalOffset.normalized * Mathf.Clamp(chaseLocalOffset.magnitude + delta, minChaseDistance, maxChaseDistance);
     }
 
     void HandleOrbitInput()
@@ -99,7 +99,7 @@ public class F1_TopDownCamera : MonoBehaviour
         if (input == 0f) return;
 
         float angle = input * orbitSpeed * Time.deltaTime;
-        chaseWorldOffset = Quaternion.Euler(0f, angle, 0f) * chaseWorldOffset;
+        chaseLocalOffset = Quaternion.Euler(0f, angle, 0f) * chaseLocalOffset;
     }
 
     void RefreshTargets()

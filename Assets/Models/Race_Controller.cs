@@ -48,6 +48,8 @@ public class Race_Controller : MonoBehaviour
     public string trackFolder = "track_data";
     public string trackFileName = "Silverstone.csv";
     public string carFolder = "f1_motion_dump";
+    [Tooltip("Max number of cars to spawn. Set to 0 to spawn all.")]
+    public int maxCars = 0;
 
     [Header("Speed Settings")]
     public float baseSpeed = 10f; 
@@ -78,8 +80,10 @@ public class Race_Controller : MonoBehaviour
         BuildTrack(tLines); 
 
         if (Directory.Exists(cDirPath)) {
-            foreach (string file in Directory.GetFiles(cDirPath, "*.csv")) {
-                SpawnCar(file);
+            string[] files = Directory.GetFiles(cDirPath, "*.csv");
+            int limit = (maxCars > 0) ? Mathf.Min(maxCars, files.Length) : files.Length;
+            for (int i = 0; i < limit; i++) {
+                SpawnCar(files[i]);
             }
         }
     }

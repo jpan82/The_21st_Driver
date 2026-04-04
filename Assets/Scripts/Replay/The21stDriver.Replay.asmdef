@@ -1,0 +1,14 @@
+{
+    "name": "The21stDriver.Replay",
+    "rootNamespace": "The21stDriver.Replay",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

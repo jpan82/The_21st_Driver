@@ -2,110 +2,169 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
+using The21stDriver.Replay.Data;
 
-public static class FastF1CsvImporter
+namespace The21stDriver.Replay.Importers
 {
-    public static ReplaySession LoadSessionFromFolder(string folderPath)
+    public static class FastF1CsvImporter
     {
-        ReplaySession session = new ReplaySession
+        public static ReplaySession LoadSessionFromFolder(string folderPath)
         {
-            sessionId = Path.GetFileName(folderPath),
-            sourceFolderPath = folderPath,
-            globalOffset = Vector3.zero
-        };
-
-        if (!Directory.Exists(folderPath))
-        {
-            Debug.LogError("Cannot find replay folder: " + folderPath);
-            return session;
-        }
-
-        string[] csvFiles = Directory.GetFiles(folderPath, "*.csv");
-        if (csvFiles.Length == 0)
-        {
-            Debug.LogWarning("No replay csv files found in: " + folderPath);
-            return session;
-        }
-
-        System.Array.Sort(csvFiles);
-
-        Vector3? sharedOffset = null;
-        foreach (string filePath in csvFiles)
-        {
-            DriverReplayTrack track = LoadTrackFromFile(filePath, ref sharedOffset);
-            if (track.samples.Count == 0)
+            ReplaySession session = new ReplaySession
             {
-                continue;
-            }
-
-            session.tracks.Add(track);
-        }
-
-        session.globalOffset = sharedOffset ?? Vector3.zero;
-        return session;
-    }
-
-    public static DriverReplayTrack LoadTrackFromFile(string filePath)
-    {
-        Vector3? sharedOffset = null;
-        return LoadTrackFromFile(filePath, ref sharedOffset);
-    }
-
-    public static DriverReplayTrack LoadTrackFromFile(string filePath, Vector3 sharedOffset)
-    {
-        Vector3? offset = sharedOffset;
-        return LoadTrackFromFile(filePath, ref offset);
-    }
-
-    private static DriverReplayTrack LoadTrackFromFile(string filePath, ref Vector3? sharedOffset)
-    {
-        DriverReplayTrack track = new DriverReplayTrack
-        {
-            driverId = Path.GetFileNameWithoutExtension(filePath),
-            sourcePath = filePath
-        };
-
-        if (!File.Exists(filePath))
-        {
-            Debug.LogError("Cannot find replay file: " + filePath);
-            return track;
-        }
-
-        string[] lines = File.ReadAllLines(filePath);
-        if (lines.Length < 2)
-        {
-            Debug.LogWarning("Replay file has no sample rows: " + filePath);
-            return track;
-        }
-
-        for (int i = 1; i < lines.Length; i++)
-        {
-            if (!TryParseSample(lines[i], out float timeSeconds, out Vector3 rawPosition))
-            {
-                continue;
-            }
-
-            if (!sharedOffset.HasValue)
-            {
-                sharedOffset = -rawPosition;
-            }
-
-            ReplaySample sample = new ReplaySample
-            {
-                sessionTimeSeconds = timeSeconds,
-                rawPosition = rawPosition,
-                worldPosition = rawPosition + sharedOffset.Value
+                sessionId = Path.GetFileName(folderPath),
+                sourceFolderPath = folderPath,
+                globalOffset = Vector3.zero
             };
 
-            track.samples.Add(sample);
+            if (!Directory.Exists(folderPath))
+            {
+                Debug.LogError("Cannot find replay folder: " + folderPath);
+                return session;
+            }
+
+            string[] csvFiles = Directory.GetFiles(folderPath, "*.csv");
+            if (csvFiles.Length == 0)
+            {
+                Debug.LogWarning("No replay csv files found in: " + folderPath);
+                return session;
+            }
+
+            System.Array.Sort(csvFiles);
+
+            Vector3? sharedOffset = null;
+            foreach (string filePath in csvFiles)
+            {
+                DriverReplayTrack track = LoadTrackFromFile(filePath, ref sharedOffset);
+                if (track.samples.Count == 0)
+                {
+                    continue;
+                }
+
+                session.tracks.Add(track);
+            }
+
+            session.globalOffset = sharedOffset ?? Vector3.zero;
+            return session;
         }
 
-        PopulateDerivedData(track);
-        return track;
-    }
+        public static DriverReplayTrack LoadTrackFromFile(string filePath)
+        {
+            Vector3? sharedOffset = null;
+            return LoadTrackFromFile(filePath, ref sharedOffset);
+        }
 
-    private static bool TryParseSample(string line, out float timeSeconds, out Vector3 rawPosition)
-    {
+        public static DriverReplayTrack LoadTrackFromFile(string filePath, Vector3 sharedOffset)
+        {
+            Vector3? offset = sharedOffset;
+            return LoadTrackFromFile(filePath, ref offset);
+        }
+
+        private static DriverReplayTrack LoadTrackFromFile(string filePath, ref Vector3? sharedOffset)
+        {
+            DriverReplayTrack track = new DriverReplayTrack
+            {
+                driverId = Path.GetFileNameWithoutExtension(filePath),
+                sourcePath = filePath
+            };
+
+            if (!File.Exists(filePath))
+            {
+                Debug.LogError("Cannot find replay file: " + filePath);
+                return track;
+            }
+
+            string[] lines = File.ReadAllLines(filePath);
+            if (lines.Length < 2)
+            {
+                Debug.LogWarning("Replay file has no sample rows: " + filePath);
+                return track;
+            }
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (!TryParseSample(lines[i], out float timeSeconds, out Vector3 rawPosition))
+                {
+                    continue;
+                }
+
+                if (!sharedOffset.HasValue)
+                {
+                    sharedOffset = -rawPosition;
+                }
+
+                ReplaySample sample = new ReplaySample
+                {
+                    sessionTimeSeconds = timeSeconds,
+                    rawPosition = rawPosition,
+                    worldPosition = rawPosition + sharedOffset.Value
+                };
+
+                track.samples.Add(sample);
+            }
+
+            PopulateDerivedData(track);
+            return track;
+        }
+
+        /// <summary>
+        /// Motion-dump style CSV: time is (rowIndex - 1) * sample interval;
+        /// world XZ from 1-based columns 6–7 (0-based indices 5 and 6).
+        /// </summary>
+        public static DriverReplayTrack LoadMotionDumpTrack(
+            string filePath,
+            float sampleIntervalSeconds,
+            float carYOffset,
+            Vector3 trackGlobalOffset)
+        {
+            DriverReplayTrack track = new DriverReplayTrack
+            {
+                driverId = Path.GetFileNameWithoutExtension(filePath),
+                sourcePath = filePath
+            };
+
+            if (!File.Exists(filePath))
+            {
+                Debug.LogError("Cannot find replay file: " + filePath);
+                return track;
+            }
+
+            string[] lines = File.ReadAllLines(filePath);
+            if (lines.Length < 2)
+            {
+                Debug.LogWarning("Replay file has no sample rows: " + filePath);
+                return track;
+            }
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string[] cols = lines[i].Split(',');
+                if (cols.Length < 7)
+                {
+                    continue;
+                }
+
+                if (!TryParseFloat(cols[5], out float x) || !TryParseFloat(cols[6], out float z))
+                {
+                    continue;
+                }
+
+                float timestamp = (i - 1) * sampleIntervalSeconds;
+                Vector3 raw = new Vector3(x, carYOffset, z);
+                track.samples.Add(new ReplaySample
+                {
+                    sessionTimeSeconds = timestamp,
+                    rawPosition = raw,
+                    worldPosition = raw + trackGlobalOffset
+                });
+            }
+
+            PopulateDerivedData(track);
+            return track;
+        }
+
+        private static bool TryParseSample(string line, out float timeSeconds, out Vector3 rawPosition)
+        {
         timeSeconds = 0f;
         rawPosition = Vector3.zero;
 
@@ -130,15 +189,15 @@ public static class FastF1CsvImporter
 
         rawPosition = new Vector3(posX, posZ, posY);
         return true;
-    }
+        }
 
-    private static bool TryParseFloat(string value, out float result)
-    {
-        return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
-    }
+        private static bool TryParseFloat(string value, out float result)
+        {
+            return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result);
+        }
 
-    private static void PopulateDerivedData(DriverReplayTrack track)
-    {
+        private static void PopulateDerivedData(DriverReplayTrack track)
+        {
         for (int i = 0; i < track.samples.Count; i++)
         {
             ReplaySample current = track.samples[i];
@@ -170,6 +229,7 @@ public static class FastF1CsvImporter
         {
             track.samples[track.samples.Count - 1].headingYawDegrees =
                 track.samples[track.samples.Count - 2].headingYawDegrees;
+        }
         }
     }
 }

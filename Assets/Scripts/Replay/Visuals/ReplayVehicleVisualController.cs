@@ -1,66 +1,68 @@
 using UnityEngine;
 using System;
 
-public class ReplayVehicleVisualController : MonoBehaviour
+namespace The21stDriver.Replay.Visuals
 {
-    [Header("References")]
-    public Transform visualRoot;
-    public Transform frontLeftSteerPivot;
-    public Transform frontRightSteerPivot;
-    public Transform frontLeftWheel;
-    public Transform frontRightWheel;
-    public Transform rearLeftWheel;
-    public Transform rearRightWheel;
-
-    [Header("Wheel Motion")]
-    public bool enableWheelSpin = false;
-    public float wheelRadius = 0.33f;
-    public Vector3 wheelSpinAxis = Vector3.right;
-    public float wheelSpinMultiplier = 1f;
-
-    [Header("Steering")]
-    public bool enableSteering = false;
-    public float steerSensitivity = 0.35f;
-    public float maxSteerAngle = 24f;
-    public float steerSmoothness = 8f;
-    [Tooltip("Local axis the steer pivots rotate around. Use Y for RB20, Z for f1_2022_free (GLB Z-up import).")]
-    public Vector3 steerAxis = Vector3.up;
-
-    [Header("Body Roll")]
-    public bool enableBodyRoll = false;
-    public float maxBodyRoll = 4f;
-    public float bodyRollSmoothness = 6f;
-    public bool invertBodyRoll = true;
-
-    private Vector3 lastPosition;
-    private Vector3 lastForward;
-    private bool hasState;
-    private float accumulatedWheelSpinDegrees;
-    private float currentSteerAngle;
-    private float currentBodyRoll;
-    private Quaternion visualRootBaseRotation;
-    private Quaternion frontLeftSteerBaseRotation;
-    private Quaternion frontRightSteerBaseRotation;
-    private Quaternion frontLeftWheelBaseRotation;
-    private Quaternion frontRightWheelBaseRotation;
-    private Quaternion rearLeftWheelBaseRotation;
-    private Quaternion rearRightWheelBaseRotation;
-
-    void Start()
+    public class ReplayVehicleVisualController : MonoBehaviour
     {
-        AutoAssignIfNeeded();
-        CacheBaseRotations();
-        ResetMotionState();
-    }
+        [Header("References")]
+        public Transform visualRoot;
+        public Transform frontLeftSteerPivot;
+        public Transform frontRightSteerPivot;
+        public Transform frontLeftWheel;
+        public Transform frontRightWheel;
+        public Transform rearLeftWheel;
+        public Transform rearRightWheel;
 
-    void OnEnable()
-    {
-        ResetMotionState();
-    }
+        [Header("Wheel Motion")]
+        public bool enableWheelSpin = false;
+        public float wheelRadius = 0.33f;
+        public Vector3 wheelSpinAxis = Vector3.right;
+        public float wheelSpinMultiplier = 1f;
 
-    [ContextMenu("Auto Assign RB20 References")]
-    private void AutoAssignRb20References()
-    {
+        [Header("Steering")]
+        public bool enableSteering = false;
+        public float steerSensitivity = 0.35f;
+        public float maxSteerAngle = 24f;
+        public float steerSmoothness = 8f;
+        [Tooltip("Local axis the steer pivots rotate around. Use Y for RB20, Z for f1_2022_free (GLB Z-up import).")]
+        public Vector3 steerAxis = Vector3.up;
+
+        [Header("Body Roll")]
+        public bool enableBodyRoll = false;
+        public float maxBodyRoll = 4f;
+        public float bodyRollSmoothness = 6f;
+        public bool invertBodyRoll = true;
+
+        private Vector3 lastPosition;
+        private Vector3 lastForward;
+        private bool hasState;
+        private float accumulatedWheelSpinDegrees;
+        private float currentSteerAngle;
+        private float currentBodyRoll;
+        private Quaternion visualRootBaseRotation;
+        private Quaternion frontLeftSteerBaseRotation;
+        private Quaternion frontRightSteerBaseRotation;
+        private Quaternion frontLeftWheelBaseRotation;
+        private Quaternion frontRightWheelBaseRotation;
+        private Quaternion rearLeftWheelBaseRotation;
+        private Quaternion rearRightWheelBaseRotation;
+
+        void Start()
+        {
+            AutoAssignIfNeeded();
+            CacheBaseRotations();
+            ResetMotionState();
+        }
+
+        void OnEnable()
+        {
+            ResetMotionState();
+        }
+
+        [ContextMenu("Auto Assign RB20 References")]
+        private void AutoAssignRb20References()
+        {
         visualRoot = FindChildRecursive("model_0_0");
         frontLeftSteerPivot = FindChildRecursive("model_1_1");
         frontRightSteerPivot = FindChildRecursive("model_2_2");
@@ -72,11 +74,11 @@ public class ReplayVehicleVisualController : MonoBehaviour
         CacheBaseRotations();
         ResetMotionState();
         LogAssignedReferences();
-    }
+        }
 
-    [ContextMenu("Auto Assign F1_2022_Free References")]
-    private void AutoAssignF1_2022_FreeReferences()
-    {
+        [ContextMenu("Auto Assign F1_2022_Free References")]
+        private void AutoAssignF1_2022_FreeReferences()
+        {
         visualRoot = FindChildRecursive("GLTF_SceneRootNode");
         // Cylinder nodes serve as both steer pivot and wheel — frontLeftWheel/frontRightWheel
         // are left null so ApplyVisuals combines steer + spin into the pivot rotation
@@ -92,10 +94,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
         CacheBaseRotations();
         ResetMotionState();
         LogAssignedReferences();
-    }
+        }
 
-    public void AutoAssignIfNeeded()
-    {
+        public void AutoAssignIfNeeded()
+        {
         if (visualRoot != null &&
             frontLeftWheel != null &&
             frontRightWheel != null &&
@@ -116,10 +118,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
         {
             AutoAssignRb20References();
         }
-    }
+        }
 
-    void LateUpdate()
-    {
+        void LateUpdate()
+        {
         Vector3 currentPosition = transform.position;
 
         if (!hasState)
@@ -178,10 +180,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
 
         lastPosition = currentPosition;
         lastForward = currentForward;
-    }
+        }
 
-    private void CacheBaseRotations()
-    {
+        private void CacheBaseRotations()
+        {
         visualRootBaseRotation = visualRoot != null ? visualRoot.localRotation : Quaternion.identity;
         frontLeftSteerBaseRotation = frontLeftSteerPivot != null ? frontLeftSteerPivot.localRotation : Quaternion.identity;
         frontRightSteerBaseRotation = frontRightSteerPivot != null ? frontRightSteerPivot.localRotation : Quaternion.identity;
@@ -189,18 +191,18 @@ public class ReplayVehicleVisualController : MonoBehaviour
         frontRightWheelBaseRotation = frontRightWheel != null ? frontRightWheel.localRotation : Quaternion.identity;
         rearLeftWheelBaseRotation = rearLeftWheel != null ? rearLeftWheel.localRotation : Quaternion.identity;
         rearRightWheelBaseRotation = rearRightWheel != null ? rearRightWheel.localRotation : Quaternion.identity;
-    }
+        }
 
-    private void ResetMotionState()
-    {
+        private void ResetMotionState()
+        {
         hasState = false;
         accumulatedWheelSpinDegrees = 0f;
         currentSteerAngle = 0f;
         currentBodyRoll = 0f;
-    }
+        }
 
-    private void ApplyVisuals()
-    {
+        private void ApplyVisuals()
+        {
         if (visualRoot != null)
         {
             visualRoot.localRotation = visualRootBaseRotation * Quaternion.Euler(0f, 0f, currentBodyRoll);
@@ -226,30 +228,30 @@ public class ReplayVehicleVisualController : MonoBehaviour
         ApplyWheelRotation(frontRightWheel, frontRightWheelBaseRotation, wheelSpinRotation);
         ApplyWheelRotation(rearLeftWheel, rearLeftWheelBaseRotation, wheelSpinRotation);
         ApplyWheelRotation(rearRightWheel, rearRightWheelBaseRotation, wheelSpinRotation);
-    }
+        }
 
-    private static void ApplyWheelRotation(Transform wheel, Quaternion baseRotation, Quaternion spinRotation)
-    {
+        private static void ApplyWheelRotation(Transform wheel, Quaternion baseRotation, Quaternion spinRotation)
+        {
         if (wheel == null)
         {
             return;
         }
 
         wheel.localRotation = baseRotation * spinRotation;
-    }
+        }
 
-    private Transform FindChildRecursive(string targetName)
-    {
+        private Transform FindChildRecursive(string targetName)
+        {
         if (string.IsNullOrWhiteSpace(targetName))
         {
             return null;
         }
 
         return FindChildRecursive(transform, targetName);
-    }
+        }
 
-    private Transform FindBestWheelTarget(string preferredName, Transform fallbackRoot)
-    {
+        private Transform FindBestWheelTarget(string preferredName, Transform fallbackRoot)
+        {
         Transform preferred = FindChildRecursive(preferredName);
         if (preferred != null)
         {
@@ -264,10 +266,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
 
         Transform fallbackRendererChild = FindFirstRendererChild(fallbackRoot);
         return fallbackRendererChild != null ? fallbackRendererChild : fallbackRoot;
-    }
+        }
 
-    private static Transform FindFirstRendererChild(Transform parent)
-    {
+        private static Transform FindFirstRendererChild(Transform parent)
+        {
         if (parent == null)
         {
             return null;
@@ -289,10 +291,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
         }
 
         return null;
-    }
+        }
 
-    private void LogAssignedReferences()
-    {
+        private void LogAssignedReferences()
+        {
         Debug.Log(
             "[ReplayVehicleVisualController] Auto-assigned references on " + gameObject.name +
             "\nvisualRoot: " + GetPath(visualRoot) +
@@ -304,10 +306,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
             "\nrearRightWheel: " + GetPath(rearRightWheel),
             this
         );
-    }
+        }
 
-    private static string GetPath(Transform target)
-    {
+        private static string GetPath(Transform target)
+        {
         if (target == null)
         {
             return "<null>";
@@ -322,10 +324,10 @@ public class ReplayVehicleVisualController : MonoBehaviour
         }
 
         return path;
-    }
+        }
 
-    private static Transform FindChildRecursive(Transform parent, string targetName)
-    {
+        private static Transform FindChildRecursive(Transform parent, string targetName)
+        {
         if (parent == null)
         {
             return null;
@@ -346,5 +348,6 @@ public class ReplayVehicleVisualController : MonoBehaviour
         }
 
         return null;
+        }
     }
 }

@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-[Serializable]
-public class ReplaySession
+namespace The21stDriver.Replay.Data
 {
-    public string sessionId;
-    public string sourceFolderPath;
-    public Vector3 globalOffset;
-    public List<DriverReplayTrack> tracks = new List<DriverReplayTrack>();
+    [Serializable]
+    public class ReplaySession
+    {
+        public string sessionId;
+        public string sourceFolderPath;
+        public Vector3 globalOffset;
+        public List<DriverReplayTrack> tracks = new List<DriverReplayTrack>();
+    }
 }

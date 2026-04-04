@@ -1,0 +1,16 @@
+{
+  "name": "The21stDriver.Gameplay",
+  "rootNamespace": "The21stDriver.Gameplay",
+  "references": [
+    "The21stDriver.Replay"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

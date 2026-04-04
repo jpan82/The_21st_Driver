@@ -1,0 +1,16 @@
+{
+  "name": "The21stDriver.Vehicles",
+  "rootNamespace": "The21stDriver.Vehicles",
+  "references": [
+    "The21stDriver.Replay"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

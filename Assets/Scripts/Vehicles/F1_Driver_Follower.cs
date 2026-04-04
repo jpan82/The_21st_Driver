@@ -1,35 +1,39 @@
 using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using The21stDriver.Replay.Data;
+using The21stDriver.Replay.Importers;
+using The21stDriver.Replay.Playback;
 
-public class F1_Driver_Follower : MonoBehaviour
+namespace The21stDriver.Vehicles
 {
-    [HideInInspector] public DriverReplayTrack replayTrack;
-    [HideInInspector] public string csvPath;
-    [HideInInspector] public Vector3 globalOffset;
-    [HideInInspector] public float uniqueYOffset;
-    [HideInInspector] public Color pathColor;
-    [HideInInspector] public float racingLineWidth;
-
-    public float speedMultiplier = 0.5f;
-    public float carVerticalOffset = 0.2f;
-    public float rotationSmoothness = 10f;
-    public float lineSampleTimeStep = 0.05f;
-
-    private TrajectorySampler sampler;
-    private float replayTimeSeconds;
-    private float replayEndTimeSeconds;
-    private bool isPlaying;
-
-    void Start()
+    public class F1_Driver_Follower : MonoBehaviour
     {
+        [HideInInspector] public DriverReplayTrack replayTrack;
+        [HideInInspector] public string csvPath;
+        [HideInInspector] public Vector3 globalOffset;
+        [HideInInspector] public float uniqueYOffset;
+        [HideInInspector] public Color pathColor;
+        [HideInInspector] public float racingLineWidth;
+
+        public float speedMultiplier = 0.5f;
+        public float carVerticalOffset = 0.2f;
+        public float rotationSmoothness = 10f;
+        public float lineSampleTimeStep = 0.05f;
+
+        private TrajectorySampler sampler;
+        private float replayTimeSeconds;
+        private float replayEndTimeSeconds;
+        private bool isPlaying;
+
+        void Start()
+        {
         if (GetComponent<Rigidbody>()) GetComponent<Rigidbody>().isKinematic = true;
         InitializeReplay();
-    }
+        }
 
-    void Update()
-    {
+        void Update()
+        {
         if (!isPlaying || sampler == null || !sampler.IsValid)
         {
             return;
@@ -53,10 +57,10 @@ public class F1_Driver_Follower : MonoBehaviour
         {
             isPlaying = false;
         }
-    }
+        }
 
-    void InitializeReplay()
-    {
+        void InitializeReplay()
+        {
         DriverReplayTrack track = LoadTrackIfNeeded();
         if (track == null || track.samples.Count < 2)
         {
@@ -93,10 +97,10 @@ public class F1_Driver_Follower : MonoBehaviour
         {
             transform.rotation = Quaternion.LookRotation(startForward, Vector3.up);
         }
-    }
+        }
 
-    DriverReplayTrack LoadTrackIfNeeded()
-    {
+        DriverReplayTrack LoadTrackIfNeeded()
+        {
         if (replayTrack != null && replayTrack.samples.Count > 0)
         {
             return replayTrack;
@@ -109,5 +113,6 @@ public class F1_Driver_Follower : MonoBehaviour
 
         replayTrack = FastF1CsvImporter.LoadTrackFromFile(csvPath, globalOffset);
         return replayTrack;
+        }
     }
 }

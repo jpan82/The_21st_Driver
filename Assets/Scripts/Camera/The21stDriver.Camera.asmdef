@@ -1,0 +1,17 @@
+{
+  "name": "The21stDriver.Camera",
+  "rootNamespace": "The21stDriver.Camera",
+  "references": [
+    "The21stDriver.Gameplay",
+    "The21stDriver.Vehicles"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

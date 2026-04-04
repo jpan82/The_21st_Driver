@@ -10,15 +10,15 @@ namespace The21stDriver.Gameplay
     [DisallowMultipleComponent]
     public class TrackAtmosphereBootstrap : MonoBehaviour
     {
-        private const string Cc0SkyResource = "CC0/Sky/kloppenheim_02_2k";
-        private const string Cc0ConcreteDiffResource = "CC0/Concrete/rough_concrete_diff_2k";
-        private const string Cc0ConcreteNorResource = "CC0/Concrete/rough_concrete_nor_gl_2k";
-        private const string Cc0AsphaltColorResource = "CC0/Asphalt/Asphalt012_1K-JPG_Color";
-        private const string Cc0AsphaltNorResource = "CC0/Asphalt/Asphalt012_1K-JPG_NormalGL";
+        private const string Cc0SkyResource = "CC0_Race/Track/autumn_field_puresky_2k";
+        private const string Cc0ConcreteDiffResource = "CC0_Race/Barrier/concrete_road_barrier_diff_2k";
+        private const string Cc0ConcreteNorResource = "CC0_Race/Barrier/concrete_road_barrier_nor_gl_2k";
+        private const string Cc0AsphaltColorResource = "CC0_Race/Track/asphalt_track_diff_2k";
+        private const string Cc0AsphaltNorResource = "CC0_Race/Track/asphalt_track_nor_gl_2k";
 
         [SerializeField] private VolumeProfile postProcessProfile;
 
-        [Header("CC0 氛围资源（默认从 Resources/CC0 加载，可拖入覆盖）")]
+        [Header("CC0 氛围资源（默认从 Resources/CC0_Race 加载，可拖入覆盖）")]
         [SerializeField] private bool useBundledCc0FromResources = true;
         [SerializeField] private Texture2D panoramicSkyOverride;
         [SerializeField] private float panoramicSkyExposure = 1.05f;

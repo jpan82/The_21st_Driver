@@ -157,7 +157,7 @@ MonoBehaviour:
   trackMaterial: {fileID: 0}
   trackFolder: track_data
   trackFileName: Silverstone.csv
-  carFolder: f1_motion_dump
+  carFolder: f1_motion_dump_with_time
   baseSpeed: 10
   speedMultiplier: 5
   carYOffset: 1
@@ -447,16 +447,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a681566078f7c4731b62a604cb3a58df, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  cameraFixedHeight: 600
+  cameraFixedHeight: 140
   followSmoothness: 5
-  chaseWorldOffset: {x: 0, y: 130, z: -200}
   chaseLookAtHeight: 2.5
   rotationSmoothness: 6
   distanceAdjustSpeed: 50
-  minTopDownHeight: 50
+  minTopDownHeight: 25
   maxTopDownHeight: 1000
-  minChaseDistance: 20
-  maxChaseDistance: 800
+  minChaseDistance: 2
+  maxChaseDistance: 80
   switchCarKey: 9
   switchCameraModeKey: 99
   orbitSpeed: 60

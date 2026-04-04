@@ -2,7 +2,8 @@
   "name": "The21stDriver.Gameplay",
   "rootNamespace": "The21stDriver.Gameplay",
   "references": [
-    "The21stDriver.Replay"
+    "The21stDriver.Replay",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

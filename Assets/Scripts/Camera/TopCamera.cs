@@ -10,20 +10,21 @@ namespace The21stDriver.Camera
         private enum CameraMode { TopDown, ChaseWorld }
 
         [Header("俯视视角")]
-        public float cameraFixedHeight = 400f; // Adjusted for better view
+        [Tooltip("World Y for orthographic-style top view; lower = closer, cars appear larger.")]
+        public float cameraFixedHeight = 140f;
         public float followSmoothness = 5f;
 
         [Header("跟车视角")]
-        public Vector3 chaseLocalOffset = new Vector3(0f, 1f, 3f); // world units: Y=up, Z=behind car
+        public Vector3 chaseLocalOffset = new Vector3(0f, 2.5f, -8f); // local Z<0 = behind car
         public float chaseLookAtHeight = 2.5f;
         public float rotationSmoothness = 6f;
 
         [Header("距离控制")]
         public float distanceAdjustSpeed = 50f;
-        public float minTopDownHeight = 50f;
+        public float minTopDownHeight = 25f;
         public float maxTopDownHeight = 1000f;
-        public float minChaseDistance = 20f;
-        public float maxChaseDistance = 800f;
+        public float minChaseDistance = 2f;
+        public float maxChaseDistance = 80f;
 
         [Header("输入")]
         public KeyCode switchCarKey = KeyCode.Tab;

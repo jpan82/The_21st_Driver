@@ -21,7 +21,7 @@ namespace The21stDriver.Gameplay
         public int maxCars = 0;
 
         [Header("Playback")]
-        [Tooltip("Interval between CSV rows in seconds (5ms = 0.005)")]
+        [Tooltip("Only for narrow 7-column reference CSV. Full-race CSV uses SessionTime column.")]
         public float sampleInterval = 0.05f;
         [Range(0.1f, 50f)]
         public float speedMultiplier = 1f;
@@ -66,7 +66,8 @@ namespace The21stDriver.Gameplay
         }
 
         void SpawnCar(string path) {
-            DriverReplayTrack trackData = FastF1CsvImporter.LoadMotionDumpTrack(path, sampleInterval, carYOffset, globalOffset);
+            DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
+                path, sampleInterval, carYOffset, globalOffset);
             if (trackData.samples.Count < 2) return;
 
             GameObject car = Instantiate(carPrefab);

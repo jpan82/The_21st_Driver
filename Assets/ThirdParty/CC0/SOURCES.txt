@@ -1,0 +1,18 @@
+Third-party CC0 / public domain packs in this folder (no F1 official branding).
+
+Poly Haven (CC0) — https://polyhaven.com
+  - asphalt_track (2K JPG: diff, nor_gl, rough) — racing asphalt surface
+  - clean_asphalt (2K JPG: diff, nor_gl) — alternate tarmac
+  - concrete_road_barrier (GLTF 2K + bin + textures) — Jersey-style barrier model
+  - autumn_field_puresky (2K HDR) — outdoor sky; copy also under Resources/CC0_Race/Track for runtime sky
+
+ambientCG (CC0) — https://ambientcg.com
+  - Rubber004 (2K JPG pack) — tire / rubber surfaces; copies under Resources/CC0_Race/Rubber
+  - Grass001 (1K JPG pack) — runoff grass; copies under Resources/CC0_Race/Grass
+
+Kenney (CC0) — https://kenney.nl/assets/racing-kit
+  - Racing Kit — low-poly track tiles, fences, flags, pit props, etc. (FBX/OBJ in RacingKit/)
+
+Runtime bundles (Resources):
+  - Assets/Resources/CC0_Race/ — Resources.Load: Track (asphalt_track, HDRI), Grass, Rubber, CleanAsphalt, Barrier (concrete jersey textures), Kenney fenceStraight/Curved FBX.
+  - TrackRaceDecorPlacer + Race_Controller.buildTracksideDecor spawn fences/barriers/tires along CSV centerline.

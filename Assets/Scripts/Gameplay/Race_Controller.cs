@@ -63,6 +63,19 @@ namespace The21stDriver.Gameplay
         [Tooltip("fenceCurved 左右不对称；右侧 (sideSign>0) 需相对左侧再绕 Y 旋转，弯钩才会朝向跑道内侧。若左右反了可改成 0 或 -180。")]
         [SerializeField] private float curvedFenceRightSideExtraYawDegrees = 180f;
 
+        [Header("F1 Event Dressing")]
+        public bool buildF1EventLandmarks = true;
+        [Tooltip("用 StreamingAssets 下车队回放 CSV 的首个采样点作起终点 / 龙门架 / 维修区朝向（与发车首车同一排序规则）；关闭则仍用中心线固定采样索引。")]
+        public bool anchorStartFromCarReplay = true;
+        public int gridRows = 12;
+        public float gridSpacingMeters = 9f;
+        public float gridBoxLengthMeters = 5.5f;
+        public float gridBoxWidthMeters = 2.4f;
+        public float pitWallLengthMeters = 220f;
+        public float pitWallOffsetMeters = 11.5f;
+        public float pitBuildingOffsetMeters = 26f;
+        public int sponsorBoardCount = 24;
+
         private Vector3 globalOffset;
         private float globalTime;
         private Transform tracksideDecorRoot;
@@ -84,6 +97,7 @@ namespace The21stDriver.Gameplay
 
             if (Directory.Exists(cDirPath)) {
                 string[] files = Directory.GetFiles(cDirPath, "*.csv");
+                System.Array.Sort(files, System.StringComparer.Ordinal);
                 int limit = (maxCars > 0) ? Mathf.Min(maxCars, files.Length) : files.Length;
                 for (int i = 0; i < limit; i++) {
                     SpawnCar(files[i]);
@@ -238,7 +252,7 @@ namespace The21stDriver.Gameplay
                 Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
                 Quaternion rotation = Quaternion.LookRotation(forward, Vector3.up);
 
-                bool useCurvedFenceHere = curvedFencePrefab != null && Random.value > 0.75f;
+                bool useCurvedFenceHere = curvedFencePrefab != null && UnityEngine.Random.value > 0.75f;
                 SpawnBarrierRow(current, rotation, right, -1f, barrierMaterial, straightFencePrefab, curvedFencePrefab, useCurvedFenceHere);
                 SpawnBarrierRow(current, rotation, right, 1f, barrierMaterial, straightFencePrefab, curvedFencePrefab, useCurvedFenceHere);
 
@@ -249,6 +263,291 @@ namespace The21stDriver.Gameplay
                     float turnSide = Vector3.Dot(Vector3.up, Vector3.Cross(incoming, forward));
                     SpawnTireStack(current, right, turnSide, tireMaterial);
                 }
+            }
+
+            BuildF1EventLandmarks(centerline, barrierMaterial);
+        }
+
+        bool TryGetReplayStartAnchor(float groundY, out Vector3 start, out Vector3 forwardHorizontal)
+        {
+            start = Vector3.zero;
+            forwardHorizontal = Vector3.zero;
+            string dir = Path.Combine(Application.streamingAssetsPath, carFolder);
+            if (!Directory.Exists(dir))
+            {
+                return false;
+            }
+
+            string[] files = Directory.GetFiles(dir, "*.csv");
+            if (files.Length == 0)
+            {
+                return false;
+            }
+
+            System.Array.Sort(files, System.StringComparer.Ordinal);
+            int limit = maxCars > 0 ? Mathf.Min(maxCars, files.Length) : files.Length;
+            for (int i = 0; i < limit; i++)
+            {
+                DriverReplayTrack t = FastF1CsvImporter.LoadDriverCsvForRaceController(
+                    files[i], sampleInterval, carYOffset, globalOffset);
+                if (t.samples.Count < 2)
+                {
+                    continue;
+                }
+
+                start = t.samples[0].worldPosition;
+                start.y = groundY;
+
+                for (int s = 1; s < t.samples.Count; s++)
+                {
+                    Vector3 delta = t.samples[s].worldPosition - t.samples[0].worldPosition;
+                    delta.y = 0f;
+                    if (delta.sqrMagnitude > 0.04f)
+                    {
+                        forwardHorizontal = delta.normalized;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        void BuildF1EventLandmarks(List<Vector3> centerline, Material barrierMaterial)
+        {
+            if (!buildF1EventLandmarks || centerline == null || centerline.Count < 2)
+            {
+                return;
+            }
+
+            float groundY = centerline[0].y;
+            Vector3 start = Vector3.zero;
+            Vector3 startForward = Vector3.zero;
+            bool fromReplay = false;
+            if (anchorStartFromCarReplay)
+            {
+                fromReplay = TryGetReplayStartAnchor(groundY, out start, out startForward);
+            }
+
+            if (!fromReplay)
+            {
+                if (centerline.Count < 24)
+                {
+                    return;
+                }
+
+                int startIndex = Mathf.Clamp(8, 1, centerline.Count - 3);
+                start = centerline[startIndex];
+                startForward = (centerline[startIndex + 1] - centerline[startIndex - 1]).normalized;
+            }
+
+            startForward.y = 0f;
+            if (startForward.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            startForward.Normalize();
+            start = new Vector3(start.x, groundY, start.z);
+
+            Vector3 startRight = Vector3.Cross(Vector3.up, startForward).normalized;
+            if (startRight.sqrMagnitude < 0.0001f)
+            {
+                return;
+            }
+
+            Material paintMaterial = CreateTexturedLitMaterial(new Color(0.95f, 0.95f, 0.95f, 1f), null, null);
+            Material gantryMaterial = CreateTexturedLitMaterial(new Color(0.10f, 0.11f, 0.13f, 1f), null, null);
+
+            BuildStartFinishMarkings(start, startForward, startRight, paintMaterial);
+            BuildStartLightGantry(start + startForward * 8f, startForward, startRight, gantryMaterial, paintMaterial);
+            BuildPitWallAndPaddock(start + startForward * 18f, startForward, startRight, barrierMaterial);
+            BuildSponsorBoards(centerline, barrierMaterial);
+        }
+
+        void BuildStartFinishMarkings(Vector3 start, Vector3 forward, Vector3 right, Material paintMaterial)
+        {
+            if (paintMaterial == null)
+            {
+                return;
+            }
+
+            GameObject line = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            line.name = "StartFinish_Line";
+            line.transform.SetParent(tracksideDecorRoot, false);
+            line.transform.position = start + Vector3.up * 0.02f;
+            line.transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
+            line.transform.localScale = new Vector3(13.8f, 0.02f, 1.0f);
+            Destroy(line.GetComponent<Collider>());
+            line.GetComponent<MeshRenderer>().sharedMaterial = paintMaterial;
+
+            int rows = Mathf.Clamp(gridRows, 6, 24);
+            for (int i = 0; i < rows; i++)
+            {
+                float longitudinal = 8f + i * gridSpacingMeters;
+                float stagger = (i % 2 == 0) ? -1.6f : 1.6f;
+                Vector3 center = start - forward * longitudinal + right * stagger + Vector3.up * 0.02f;
+                CreateGridBox(center, forward, paintMaterial);
+            }
+        }
+
+        void CreateGridBox(Vector3 center, Vector3 forward, Material paintMaterial)
+        {
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+            float halfLen = gridBoxLengthMeters * 0.5f;
+            float halfWid = gridBoxWidthMeters * 0.5f;
+            float lineWidth = 0.08f;
+
+            CreateMarkingStrip(center + forward * halfLen, forward, right, gridBoxWidthMeters, lineWidth, paintMaterial);
+            CreateMarkingStrip(center - forward * halfLen, forward, right, gridBoxWidthMeters, lineWidth, paintMaterial);
+            CreateMarkingStrip(center - right * halfWid, right, forward, gridBoxLengthMeters, lineWidth, paintMaterial);
+            CreateMarkingStrip(center + right * halfWid, right, forward, gridBoxLengthMeters, lineWidth, paintMaterial);
+        }
+
+        void CreateMarkingStrip(Vector3 center, Vector3 forwardAxis, Vector3 sideAxis, float length, float width, Material material)
+        {
+            GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            strip.transform.SetParent(tracksideDecorRoot, false);
+            strip.transform.position = center;
+            strip.transform.rotation = Quaternion.LookRotation(forwardAxis, Vector3.up);
+            strip.transform.localScale = new Vector3(width, 0.02f, length);
+            Destroy(strip.GetComponent<Collider>());
+            strip.GetComponent<MeshRenderer>().sharedMaterial = material;
+        }
+
+        void BuildStartLightGantry(Vector3 anchor, Vector3 forward, Vector3 right, Material gantryMaterial, Material lampMaterial)
+        {
+            if (gantryMaterial == null)
+            {
+                return;
+            }
+
+            float halfSpan = 8f;
+            Vector3 leftPole = anchor - right * halfSpan;
+            Vector3 rightPole = anchor + right * halfSpan;
+
+            CreateBlock("Gantry_LeftPole", leftPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
+            CreateBlock("Gantry_RightPole", rightPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
+            CreateBlock("Gantry_Beam", anchor + Vector3.up * 9.0f, Quaternion.LookRotation(forward, Vector3.up), new Vector3(0.7f, 0.8f, halfSpan * 2f + 1.5f), gantryMaterial);
+
+            Material lightOnMaterial = CreateTexturedLitMaterial(new Color(0.88f, 0.14f, 0.14f, 1f), null, null);
+            Material lightOffMaterial = lampMaterial ?? gantryMaterial;
+            for (int i = 0; i < 5; i++)
+            {
+                float normalized = (i - 2f) * 1.35f;
+                Vector3 lightPos = anchor + right * normalized + Vector3.up * 8.35f - forward * 0.5f;
+                Material lightMat = (i == 2) ? lightOnMaterial : lightOffMaterial;
+                CreateBlock("Gantry_Light_" + i, lightPos, Quaternion.identity, new Vector3(0.35f, 0.35f, 0.35f), lightMat);
+            }
+        }
+
+        void BuildPitWallAndPaddock(Vector3 pitAnchor, Vector3 forward, Vector3 right, Material barrierMaterial)
+        {
+            if (barrierMaterial == null)
+            {
+                return;
+            }
+
+            float sectionLength = Mathf.Max(6f, barrierLengthMeters);
+            int sections = Mathf.Max(8, Mathf.RoundToInt(pitWallLengthMeters / sectionLength));
+            Material paddockMaterial = CreateTexturedLitMaterial(new Color(0.36f, 0.38f, 0.42f, 1f), null, null);
+
+            for (int i = 0; i < sections; i++)
+            {
+                float longitudinal = i * sectionLength;
+                Vector3 basePos = pitAnchor + forward * longitudinal;
+                Vector3 wallPos = basePos + right * pitWallOffsetMeters + Vector3.up * (barrierHeightMeters * 0.5f + 0.1f);
+
+                CreateBlock(
+                    "PitWall_" + i,
+                    wallPos,
+                    Quaternion.LookRotation(forward, Vector3.up),
+                    new Vector3(barrierThicknessMeters * 1.2f, barrierHeightMeters * 1.15f, sectionLength),
+                    barrierMaterial);
+
+                if (i % 3 == 0)
+                {
+                    Vector3 boxPos = basePos + right * pitBuildingOffsetMeters + Vector3.up * 4.2f;
+                    float zScale = Mathf.Clamp(sectionLength * 1.05f, 8f, 18f);
+                    CreateBlock(
+                        "PaddockBox_" + i,
+                        boxPos,
+                        Quaternion.LookRotation(forward, Vector3.up),
+                        new Vector3(10f, 8.4f, zScale),
+                        paddockMaterial);
+                }
+            }
+        }
+
+        void BuildSponsorBoards(List<Vector3> centerline, Material frameMaterial)
+        {
+            if (centerline == null || centerline.Count < 4 || sponsorBoardCount <= 0)
+            {
+                return;
+            }
+
+            Color[] palette =
+            {
+                new Color(0.85f, 0.10f, 0.10f, 1f),
+                new Color(0.05f, 0.10f, 0.14f, 1f),
+                new Color(0.06f, 0.42f, 0.76f, 1f),
+                new Color(0.85f, 0.63f, 0.08f, 1f),
+                new Color(0.95f, 0.95f, 0.95f, 1f)
+            };
+
+            int stride = Mathf.Max(6, centerline.Count / sponsorBoardCount);
+            int created = 0;
+
+            for (int i = 2; i < centerline.Count - 2 && created < sponsorBoardCount; i += stride)
+            {
+                Vector3 current = centerline[i];
+                Vector3 forward = (centerline[i + 1] - centerline[i - 1]).normalized;
+                if (forward.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+
+                Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+                float sideSign = (created % 2 == 0) ? 1f : -1f;
+                Vector3 boardPos = current + right * sideSign * (fenceOffsetMeters + 3f) + Vector3.up * 2.2f;
+
+                Material boardMaterial = CreateTexturedLitMaterial(palette[created % palette.Length], null, null);
+                CreateBlock(
+                    "SponsorBoard_" + created,
+                    boardPos,
+                    Quaternion.LookRotation(forward * -sideSign, Vector3.up),
+                    new Vector3(0.25f, 2.2f, 6.8f),
+                    boardMaterial);
+
+                if (frameMaterial != null)
+                {
+                    Vector3 framePos = boardPos - right * sideSign * 0.2f;
+                    CreateBlock(
+                        "SponsorFrame_" + created,
+                        framePos,
+                        Quaternion.LookRotation(forward, Vector3.up),
+                        new Vector3(0.2f, 2.5f, 7.1f),
+                        frameMaterial);
+                }
+
+                created++;
+            }
+        }
+
+        void CreateBlock(string blockName, Vector3 position, Quaternion rotation, Vector3 scale, Material material)
+        {
+            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            block.name = blockName;
+            block.transform.SetParent(tracksideDecorRoot, false);
+            block.transform.position = position;
+            block.transform.rotation = rotation;
+            block.transform.localScale = scale;
+            Destroy(block.GetComponent<Collider>());
+
+            MeshRenderer renderer = block.GetComponent<MeshRenderer>();
+            if (material != null)
+            {
+                renderer.sharedMaterial = material;
             }
         }
 

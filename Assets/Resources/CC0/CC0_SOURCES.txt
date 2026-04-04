@@ -1,0 +1,17 @@
+Bundled CC0 assets (commercial use allowed; attribution appreciated, not required).
+
+Sky (HDRI, 2K):
+  Poly Haven — kloppenheim_02
+  https://polyhaven.com/a/kloppenheim_02
+
+Concrete / stand facades (2K JPG):
+  Poly Haven — rough_concrete (diffuse + nor_gl)
+  https://polyhaven.com/a/rough_concrete
+
+Asphalt / distant ground (1K JPG pack):
+  ambientCG — Asphalt012
+  https://ambientcg.com/a/Asphalt012
+
+Unity import tips:
+  - Normal maps (*.jpg NormalGL / nor_gl): select each in Project, set Texture Type = Normal map (OpenGL).
+  - HDRI (*.hdr): default import is fine for Skybox/Panoramic _MainTex.

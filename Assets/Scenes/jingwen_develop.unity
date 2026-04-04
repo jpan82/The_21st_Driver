@@ -154,15 +154,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   carPrefab: {fileID: 7845393771176110750, guid: 84e78b1dcfa6440c0a5e7bd84b6e8a47,
     type: 3}
-  trackMaterial: {fileID: 0}
+  trackMaterial: {fileID: 2100000, guid: 8e4c6a2f91bd4e8ab7c3d50123456ef0, type: 2}
   trackFolder: track_data
   trackFileName: Silverstone.csv
   carFolder: f1_motion_dump_with_time
-  baseSpeed: 10
+  maxCars: 0
+  sampleInterval: 0.05
   speedMultiplier: 5
-  carYOffset: 1
+  carYOffset: 0.25
   rotationSmoothness: 10
   fixedXRotation: 0
+  spawnHeightOffset: 0.8
+  useGroundSpring: 1
+  groundRaycastStartHeight: 20
+  groundRaycastMaxDistance: 60
+  groundSpringStrength: 32
+  groundSpringDamping: 8
+  groundSnapEpsilon: 0.01
+  groundSnapVelocity: 0.02
   trackUvMetersPerRepeat: 12
 --- !u!4 &391485783
 Transform:
@@ -310,6 +319,7 @@ GameObject:
   - component: {fileID: 1970704316}
   - component: {fileID: 1970704315}
   - component: {fileID: 1970704319}
+  - component: {fileID: 1970704320}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -340,7 +350,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -459,6 +469,19 @@ MonoBehaviour:
   switchCarKey: 9
   switchCameraModeKey: 99
   orbitSpeed: 60
+--- !u!114 &1970704320
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1970704314}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1f8a3c45b9e4f0a8c1d2e3f4b5a6c7d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  postProcessProfile: {fileID: 11400000, guid: a6560a915ef98420e9faacc1c7438823, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -27,9 +27,21 @@ namespace The21stDriver.Gameplay
         public float speedMultiplier = 1f;
 
         [Header("Car Alignment")]
-        public float carYOffset = 1.0f;
+        public float carYOffset = 0.25f;
         public float rotationSmoothness = 10f;
         public float fixedXRotation = -90f;
+        [Tooltip("Spawn replay cars slightly above the track so they settle visually instead of snapping.")]
+        public float spawnHeightOffset = 0.8f;
+
+        [Header("Half-Physics Y")]
+        [Tooltip("Use ground raycast + spring settling for NPC cars instead of hard Y snapping.")]
+        public bool useGroundSpring = true;
+        public float groundRaycastStartHeight = 20f;
+        public float groundRaycastMaxDistance = 60f;
+        public float groundSpringStrength = 32f;
+        public float groundSpringDamping = 8f;
+        public float groundSnapEpsilon = 0.01f;
+        public float groundSnapVelocity = 0.02f;
 
         [Header("Track Visual")]
         public float trackUvMetersPerRepeat = 12f;
@@ -101,6 +113,14 @@ namespace The21stDriver.Gameplay
                 if (fallback.name.Contains("Universal")) m.SetColor("_BaseColor", Color.grey);
                 else m.color = Color.grey;
                 mr.material = m;
+            }
+
+            if (useGroundSpring)
+            {
+                MeshCollider col = obj.AddComponent<MeshCollider>();
+                col.sharedMesh = mesh;
+                col.convex = false;
+                obj.AddComponent<ReplayTrackSurface>();
             }
         }
     }

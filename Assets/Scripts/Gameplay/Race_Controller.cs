@@ -44,28 +44,36 @@ namespace The21stDriver.Gameplay
         public float groundSnapEpsilon = 0.01f;
         public float groundSnapVelocity = 0.02f;
 
+        // 赛道丝带网格与半宽倍率：BuildTrack、TrackRibbonMeshFromCsv；UV 见 trackUvMetersPerRepeat。
         [Header("Track Visual")]
         public float trackUvMetersPerRepeat = 12f;
+        public float trackRibbonWidthMultiplier = 1.5f;
 
+        // 草地平面、混凝土护栏、Kenney 围栏、轮胎堆：BuildTracksideDecor、SpawnBarrierRow、SpawnTireStack。
         [Header("Trackside Decor")]
         public bool buildTracksideDecor = true;
         public float decorSpacingMeters = 24f;
         public float barrierOffsetMeters = 14f;
         public float fenceOffsetMeters = 18f;
+        public float decorBarrierClearanceBeyondAsphaltMeters = 2.5f;
+        public float decorFenceClearanceBeyondAsphaltMeters = 8f;
+        public float decorTireClearanceBeyondAsphaltMeters = 3f;
+        public float decorSponsorClearanceBeyondAsphaltMeters = 9f;
         public float groundPaddingMeters = 80f;
         public float barrierLengthMeters = 10f;
         public float barrierHeightMeters = 1.25f;
         public float barrierThicknessMeters = 0.7f;
         public float fenceVerticalOffset = 2.15f;
         public float tireStackOffsetMeters = 20f;
-        [Tooltip("Kenney 围栏沿模型本地 +X 拉长；代码用 LookRotation 让物体 +Z 对准赛道切线。默认 90° 使围栏顺赛道延伸。")]
         [SerializeField] private float fencePrefabYawOffsetDegrees = 90f;
-        [Tooltip("fenceCurved 左右不对称；右侧 (sideSign>0) 需相对左侧再绕 Y 旋转，弯钩才会朝向跑道内侧。若左右反了可改成 0 或 -180。")]
         [SerializeField] private float curvedFenceRightSideExtraYawDegrees = 180f;
+        public bool enableCurvedFencePrefabs = false;
+        public float curvedFenceMaxCornerDeg = 8f;
+        public float cornerFenceExtraOutwardMeters = 2f;
 
+        // 起终点线、发车格、龙门架、维修墙、赞助牌：BuildF1EventLandmarks 及子方法。
         [Header("F1 Event Dressing")]
         public bool buildF1EventLandmarks = true;
-        [Tooltip("用 StreamingAssets 下车队回放 CSV 的首个采样点作起终点 / 龙门架 / 维修区朝向（与发车首车同一排序规则）；关闭则仍用中心线固定采样索引。")]
         public bool anchorStartFromCarReplay = true;
         public int gridRows = 12;
         public float gridSpacingMeters = 9f;
@@ -74,11 +82,37 @@ namespace The21stDriver.Gameplay
         public float pitWallLengthMeters = 220f;
         public float pitWallOffsetMeters = 11.5f;
         public float pitBuildingOffsetMeters = 26f;
+        public float pitWallClearanceBeyondAsphaltMeters = 3f;
+        public float pitPaddockBeyondWallMeters = 12f;
         public int sponsorBoardCount = 24;
+
+        // 弯道刹车牌、马修塔、赛段横幅门：BuildRaceOperationsProps。
+        [Header("F1 Operations Props")]
+        public bool buildRaceOperationsProps = true;
+        public bool buildBrakingBoards = false;
+        public float cornerDetectionAngleDeg = 14f;
+        public float cornerPropsMinSpacingMeters = 45f;
+        public float brakingBoardOffsetMeters = 8f;
+        public float marshalPostOffsetMeters = 10f;
+        public float operationsClearanceBeyondAsphaltMeters = 3f;
+        public float bannerGateClearanceBeyondAsphaltMeters = 2.5f;
+        public int bannerGateCount = 4;
+        public Color marshalFlagColor = new Color(0.95f, 0.78f, 0.12f, 1f);
+
+        // 生成后整体外推，避免低位物体压赛道：EnforceTrackClearanceForAllProps、TryKeepBlockOutsideTrack、CreateBlock。
+        [Header("Track Clearance")]
+        public bool enforceNoPropsOnTrack = true;
+        public float enforceTrackClearanceExtraMeters = 0.6f;
+        public float fallbackTrackHalfWidthMeters = 14f;
+
+        // Kenney 围栏网格/pivot 相对赛道的额外外移量：SpawnBarrierRow。
+        [Header("Fence / Barrier geometry")]
+        public float fencePrefabAdditionalOutwardMeters = 1.35f;
 
         private Vector3 globalOffset;
         private float globalTime;
         private Transform tracksideDecorRoot;
+        private RacePropFactory propFactory;
 
         public float GlobalTime => globalTime;
 
@@ -91,7 +125,10 @@ namespace The21stDriver.Gameplay
             if (!File.Exists(tPath)) return;
 
             string[] tLines = File.ReadAllLines(tPath);
-            globalOffset = -new Vector3(float.Parse(tLines[1].Split(',')[0], CultureInfo.InvariantCulture), 0, float.Parse(tLines[1].Split(',')[1], CultureInfo.InvariantCulture));
+            if (!TryParseTrackGlobalOffset(tLines, tPath, out globalOffset))
+            {
+                return;
+            }
 
             BuildTrack(tLines);
 
@@ -110,6 +147,12 @@ namespace The21stDriver.Gameplay
         }
 
         void SpawnCar(string path) {
+            if (carPrefab == null)
+            {
+                Debug.LogWarning("Race_Controller: carPrefab is not assigned; skipping car spawn.");
+                return;
+            }
+
             DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
                 path, sampleInterval, carYOffset, globalOffset);
             if (trackData.samples.Count < 2) return;
@@ -122,11 +165,11 @@ namespace The21stDriver.Gameplay
         }
 
         void BuildTrack(string[] lines) {
-            const float trackWidthMultiplier = 1.5f;
+            // 丝带路面网格与可选 MeshCollider；材质来自 trackMaterial 或着色器兜底。
             Mesh mesh = TrackRibbonMeshFromCsv.BuildRibbonMesh(
                 lines,
                 globalOffset,
-                trackWidthMultiplier,
+                trackRibbonWidthMultiplier,
                 true,
                 trackUvMetersPerRepeat,
                 true,
@@ -172,39 +215,57 @@ namespace The21stDriver.Gameplay
 
             tracksideDecorRoot = new GameObject("Trackside_Decor").transform;
 
-            List<Vector3> centerline = BuildCenterline(lines);
+            List<Vector3> centerline;
+            List<float> halfRight;
+            List<float> halfLeft;
+            bool useRibbonWidths = TryBuildRibbonCentersAndHalfWidths(lines, out centerline, out halfRight, out halfLeft);
+            if (!useRibbonWidths)
+            {
+                centerline = BuildCenterline(lines);
+                halfRight = null;
+                halfLeft = null;
+            }
+
             if (centerline.Count < 2)
             {
                 return;
             }
 
-            Texture2D grassAlbedo = Resources.Load<Texture2D>("CC0_Race/Grass/Grass001_1K-JPG_Color");
-            Texture2D grassNormal = Resources.Load<Texture2D>("CC0_Race/Grass/Grass001_1K-JPG_NormalGL");
-            Texture2D barrierAlbedo = Resources.Load<Texture2D>("CC0_Race/Barrier/concrete_road_barrier_diff_2k");
-            Texture2D barrierNormal = Resources.Load<Texture2D>("CC0_Race/Barrier/concrete_road_barrier_nor_gl_2k");
-            Texture2D rubberAlbedo = Resources.Load<Texture2D>("CC0_Race/Rubber/Rubber004_2K-JPG_Color");
-            Texture2D rubberNormal = Resources.Load<Texture2D>("CC0_Race/Rubber/Rubber004_2K-JPG_NormalGL");
-            GameObject straightFencePrefab = Resources.Load<GameObject>("CC0_Race/Kenney/fenceStraight");
-            GameObject curvedFencePrefab = Resources.Load<GameObject>("CC0_Race/Kenney/fenceCurved");
-
-            Material grassMaterial = CreateTexturedLitMaterial(new Color(0.38f, 0.49f, 0.23f, 1f), grassAlbedo, grassNormal);
-            Material barrierMaterial = CreateTexturedLitMaterial(Color.white, barrierAlbedo, barrierNormal);
-            Material tireMaterial = CreateTexturedLitMaterial(new Color(0.12f, 0.12f, 0.12f, 1f), rubberAlbedo, rubberNormal);
-
-            if (grassMaterial != null)
+            List<float> clearanceHalfRight;
+            List<float> clearanceHalfLeft;
+            if (useRibbonWidths && halfRight != null && halfLeft != null)
             {
-                ApplyTextureTiling(grassMaterial, new Vector2(60f, 60f));
+                clearanceHalfRight = halfRight;
+                clearanceHalfLeft = halfLeft;
+            }
+            else
+            {
+                clearanceHalfRight = new List<float>(centerline.Count);
+                clearanceHalfLeft = new List<float>(centerline.Count);
+                float fh = Mathf.Max(0.5f, fallbackTrackHalfWidthMeters);
+                for (int k = 0; k < centerline.Count; k++)
+                {
+                    clearanceHalfRight.Add(fh);
+                    clearanceHalfLeft.Add(fh);
+                }
             }
 
-            if (barrierMaterial != null)
-            {
-                ApplyTextureTiling(barrierMaterial, new Vector2(8f, 1f));
-            }
+            propFactory = new RacePropFactory(
+                tracksideDecorRoot,
+                centerline,
+                clearanceHalfRight,
+                clearanceHalfLeft,
+                enforceTrackClearanceExtraMeters);
 
-            if (tireMaterial != null)
-            {
-                ApplyTextureTiling(tireMaterial, new Vector2(3f, 3f));
-            }
+            // CC0_Race 素材加载与材质构造统一从素材目录类读取。
+            RaceAssetCatalog.TracksideAssets assets = RaceAssetCatalog.LoadTracksideAssets();
+            RaceAssetCatalog.TracksideMaterials tracksideMats = RaceAssetCatalog.BuildTracksideMaterials(assets);
+            GameObject straightFencePrefab = assets.straightFencePrefab;
+            GameObject curvedFencePrefab = assets.curvedFencePrefab;
+
+            Material grassMaterial = tracksideMats.grass;
+            Material barrierMaterial = tracksideMats.barrier;
+            Material tireMaterial = tracksideMats.tire;
 
             Vector3 boundsMin = centerline[0];
             Vector3 boundsMax = centerline[0];
@@ -215,7 +276,7 @@ namespace The21stDriver.Gameplay
                 boundsMax = Vector3.Max(boundsMax, point);
             }
 
-            CreateGroundPlane(boundsMin, boundsMax, grassMaterial);
+            propFactory.CreateGroundPlane(boundsMin, boundsMax, grassMaterial, groundPaddingMeters);
 
             float distanceSinceLastDecor = 0f;
             for (int i = 1; i < centerline.Count - 1; i++)
@@ -252,20 +313,270 @@ namespace The21stDriver.Gameplay
                 Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
                 Quaternion rotation = Quaternion.LookRotation(forward, Vector3.up);
 
-                bool useCurvedFenceHere = curvedFencePrefab != null && UnityEngine.Random.value > 0.75f;
-                SpawnBarrierRow(current, rotation, right, -1f, barrierMaterial, straightFencePrefab, curvedFencePrefab, useCurvedFenceHere);
-                SpawnBarrierRow(current, rotation, right, 1f, barrierMaterial, straightFencePrefab, curvedFencePrefab, useCurvedFenceHere);
-
                 Vector3 incoming = (current - previous).normalized;
                 float cornerSeverity = Vector3.Angle(incoming, forward);
+                bool useCurvedFenceHere = enableCurvedFencePrefabs
+                    && curvedFencePrefab != null
+                    && cornerSeverity <= curvedFenceMaxCornerDeg
+                    && UnityEngine.Random.value > 0.75f;
+
+                float hl = useRibbonWidths ? halfLeft[i] : 0f;
+                float hr = useRibbonWidths ? halfRight[i] : 0f;
+                propFactory.SpawnBarrierRow(
+                    current,
+                    rotation,
+                    right,
+                    -1f,
+                    barrierMaterial,
+                    straightFencePrefab,
+                    curvedFencePrefab,
+                    useCurvedFenceHere,
+                    useRibbonWidths,
+                    hl,
+                    hr,
+                    cornerSeverity,
+                    barrierOffsetMeters,
+                    fenceOffsetMeters,
+                    decorBarrierClearanceBeyondAsphaltMeters,
+                    decorFenceClearanceBeyondAsphaltMeters,
+                    curvedFenceMaxCornerDeg,
+                    cornerFenceExtraOutwardMeters,
+                    barrierThicknessMeters,
+                    barrierHeightMeters,
+                    barrierLengthMeters,
+                    fencePrefabAdditionalOutwardMeters,
+                    fenceVerticalOffset,
+                    fencePrefabYawOffsetDegrees,
+                    curvedFenceRightSideExtraYawDegrees);
+                propFactory.SpawnBarrierRow(
+                    current,
+                    rotation,
+                    right,
+                    1f,
+                    barrierMaterial,
+                    straightFencePrefab,
+                    curvedFencePrefab,
+                    useCurvedFenceHere,
+                    useRibbonWidths,
+                    hl,
+                    hr,
+                    cornerSeverity,
+                    barrierOffsetMeters,
+                    fenceOffsetMeters,
+                    decorBarrierClearanceBeyondAsphaltMeters,
+                    decorFenceClearanceBeyondAsphaltMeters,
+                    curvedFenceMaxCornerDeg,
+                    cornerFenceExtraOutwardMeters,
+                    barrierThicknessMeters,
+                    barrierHeightMeters,
+                    barrierLengthMeters,
+                    fencePrefabAdditionalOutwardMeters,
+                    fenceVerticalOffset,
+                    fencePrefabYawOffsetDegrees,
+                    curvedFenceRightSideExtraYawDegrees);
+
                 if (cornerSeverity > 10f)
                 {
                     float turnSide = Vector3.Dot(Vector3.up, Vector3.Cross(incoming, forward));
-                    SpawnTireStack(current, right, turnSide, tireMaterial);
+                    propFactory.SpawnTireStack(current, right, turnSide, tireMaterial, useRibbonWidths, hl, hr, tireStackOffsetMeters, decorTireClearanceBeyondAsphaltMeters);
                 }
             }
 
-            BuildF1EventLandmarks(centerline, barrierMaterial);
+            BuildF1EventLandmarks(centerline, halfRight, halfLeft, useRibbonWidths, barrierMaterial);
+            BuildRaceOperationsProps(centerline, halfRight, halfLeft, useRibbonWidths, barrierMaterial);
+
+            if (enforceNoPropsOnTrack)
+            {
+                propFactory.EnforceTrackClearanceForAllProps();
+            }
+        }
+
+
+
+        void BuildRaceOperationsProps(List<Vector3> centerline, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths, Material frameMaterial)
+        {
+            if (!buildRaceOperationsProps || centerline == null || centerline.Count < 8)
+            {
+                return;
+            }
+
+            RaceAssetCatalog.OperationsMaterials opsMats = RaceAssetCatalog.BuildOperationsMaterials(frameMaterial, marshalFlagColor);
+            Material boardMaterial = opsMats.board;
+            Material postMaterial = opsMats.post;
+            Material flagMaterial = opsMats.flag;
+            Material bannerMaterial = opsMats.banner;
+
+            float spacingAccum = cornerPropsMinSpacingMeters;
+            for (int i = 2; i < centerline.Count - 2; i++)
+            {
+                Vector3 prev = centerline[i - 1];
+                Vector3 curr = centerline[i];
+                Vector3 next = centerline[i + 1];
+
+                spacingAccum += Vector3.Distance(prev, curr);
+                Vector3 incoming = (curr - prev).normalized;
+                Vector3 outgoing = (next - curr).normalized;
+                if (incoming.sqrMagnitude < 0.0001f || outgoing.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+
+                float cornerAngle = Vector3.Angle(incoming, outgoing);
+                if (cornerAngle < cornerDetectionAngleDeg || spacingAccum < cornerPropsMinSpacingMeters)
+                {
+                    continue;
+                }
+
+                spacingAccum = 0f;
+                float turnSign = Vector3.Dot(Vector3.up, Vector3.Cross(incoming, outgoing));
+                Vector3 right = Vector3.Cross(Vector3.up, outgoing).normalized;
+                float outerSide = turnSign >= 0f ? 1f : -1f;
+                float hr = useRibbonWidths ? halfRight[i] : 0f;
+                float hl = useRibbonWidths ? halfLeft[i] : 0f;
+
+                if (buildBrakingBoards)
+                {
+                    BuildBrakingBoards(curr, incoming, right, outerSide, boardMaterial, postMaterial, useRibbonWidths, hr, hl);
+                }
+                BuildMarshalPost(curr, outgoing, right, outerSide, postMaterial, flagMaterial, useRibbonWidths, hr, hl);
+            }
+
+            BuildBannerGates(centerline, halfRight, halfLeft, useRibbonWidths, bannerMaterial, postMaterial);
+        }
+
+        void BuildBrakingBoards(Vector3 cornerPoint, Vector3 incoming, Vector3 right, float sideSign, Material boardMaterial, Material postMaterial, bool useRibbonWidths, float halfRightHere, float halfLeftHere)
+        {
+            if (boardMaterial == null)
+            {
+                return;
+            }
+
+            float lateral = brakingBoardOffsetMeters;
+            if (useRibbonWidths)
+            {
+                float halfOut = sideSign > 0f ? halfRightHere : halfLeftHere;
+                lateral = halfOut + operationsClearanceBeyondAsphaltMeters;
+            }
+
+            int[] markers = { 150, 100, 50 };
+            for (int idx = 0; idx < markers.Length; idx++)
+            {
+                float longitudinal = markers[idx] * 0.2f;
+                Vector3 basePos = cornerPoint - incoming * longitudinal + right * sideSign * lateral;
+
+                Vector3 postPos = basePos + Vector3.up * 1.05f;
+                propFactory.CreateBlock(
+                    "BrakePost_" + markers[idx],
+                    postPos,
+                    Quaternion.identity,
+                    new Vector3(0.16f, 2.1f, 0.16f),
+                    postMaterial);
+
+                Vector3 boardPos = basePos + Vector3.up * 2.05f;
+                propFactory.CreateBlock(
+                    "BrakeBoard_" + markers[idx],
+                    boardPos,
+                    Quaternion.LookRotation(-right * sideSign, Vector3.up),
+                    new Vector3(0.12f, 1.0f, 0.85f),
+                    boardMaterial);
+            }
+        }
+
+        void BuildMarshalPost(Vector3 cornerPoint, Vector3 forward, Vector3 right, float sideSign, Material postMaterial, Material flagMaterial, bool useRibbonWidths, float halfRightHere, float halfLeftHere)
+        {
+            float lateral = marshalPostOffsetMeters;
+            if (useRibbonWidths)
+            {
+                float halfOut = sideSign > 0f ? halfRightHere : halfLeftHere;
+                lateral = halfOut + operationsClearanceBeyondAsphaltMeters;
+            }
+
+            Vector3 postBase = cornerPoint + right * sideSign * lateral;
+
+            propFactory.CreateBlock(
+                "MarshalPost_Base",
+                postBase + Vector3.up * 1.4f,
+                Quaternion.identity,
+                new Vector3(1.2f, 2.8f, 1.2f),
+                postMaterial);
+
+            propFactory.CreateBlock(
+                "MarshalPost_Pole",
+                postBase + Vector3.up * 4.3f,
+                Quaternion.identity,
+                new Vector3(0.15f, 2.8f, 0.15f),
+                postMaterial);
+
+            propFactory.CreateBlock(
+                "MarshalFlagPanel",
+                postBase + Vector3.up * 5.4f + right * sideSign * 0.35f,
+                Quaternion.LookRotation(forward, Vector3.up),
+                new Vector3(0.04f, 1.2f, 1.8f),
+                flagMaterial);
+        }
+
+        void BuildBannerGates(List<Vector3> centerline, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths, Material bannerMaterial, Material frameMaterial)
+        {
+            if (bannerGateCount <= 0 || centerline.Count < 6)
+            {
+                return;
+            }
+
+            int stride = Mathf.Max(18, centerline.Count / (bannerGateCount + 1));
+            int built = 0;
+            for (int i = stride; i < centerline.Count - stride && built < bannerGateCount; i += stride)
+            {
+                Vector3 prev = centerline[i - 1];
+                Vector3 curr = centerline[i];
+                Vector3 next = centerline[i + 1];
+                Vector3 incoming = (curr - prev).normalized;
+                Vector3 outgoing = (next - curr).normalized;
+                float curvature = Vector3.Angle(incoming, outgoing);
+
+                if (curvature > 6f)
+                {
+                    continue;
+                }
+
+                Vector3 forward = (next - prev).normalized;
+                if (forward.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+
+                Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+                float leftDist;
+                float rightDist;
+                if (useRibbonWidths && halfRight != null && halfLeft != null && i < halfRight.Count)
+                {
+                    leftDist = halfLeft[i] + bannerGateClearanceBeyondAsphaltMeters;
+                    rightDist = halfRight[i] + bannerGateClearanceBeyondAsphaltMeters;
+                }
+                else
+                {
+                    leftDist = 7.5f;
+                    rightDist = 7.5f;
+                }
+
+                Vector3 leftPole = curr - right * leftDist;
+                Vector3 rightPole = curr + right * rightDist;
+                float crossHalfZ = (leftDist + rightDist) * 0.5f + 0.4f;
+
+                propFactory.CreateBlock("BannerPole_Left_" + built, leftPole + Vector3.up * 3.9f, Quaternion.identity, new Vector3(0.28f, 7.8f, 0.28f), frameMaterial);
+                propFactory.CreateBlock("BannerPole_Right_" + built, rightPole + Vector3.up * 3.9f, Quaternion.identity, new Vector3(0.28f, 7.8f, 0.28f), frameMaterial);
+                // 横幅横梁：LookRotation(forward) 后 scale X 为沿赛道横向跨度。
+                propFactory.CreateBlock("BannerCross_" + built, curr + Vector3.up * 7.6f, Quaternion.LookRotation(forward, Vector3.up), new Vector3(crossHalfZ * 2f + 0.8f, 0.28f, 0.35f), frameMaterial);
+                float panelWidth = Mathf.Max(9.5f, leftDist + rightDist + 1f);
+                // 横幅面板：X=横跨宽度，Y=高度，Z=薄片厚度。
+                propFactory.CreateBlock(
+                    "BannerPanel_" + built,
+                    curr + Vector3.up * 6.45f,
+                    Quaternion.LookRotation(forward, Vector3.up),
+                    new Vector3(panelWidth, 1.5f, 0.08f),
+                    bannerMaterial);
+
+                built++;
+            }
         }
 
         bool TryGetReplayStartAnchor(float groundY, out Vector3 start, out Vector3 forwardHorizontal)
@@ -313,7 +624,7 @@ namespace The21stDriver.Gameplay
             return false;
         }
 
-        void BuildF1EventLandmarks(List<Vector3> centerline, Material barrierMaterial)
+        void BuildF1EventLandmarks(List<Vector3> centerline, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths, Material barrierMaterial)
         {
             if (!buildF1EventLandmarks || centerline == null || centerline.Count < 2)
             {
@@ -356,13 +667,14 @@ namespace The21stDriver.Gameplay
                 return;
             }
 
-            Material paintMaterial = CreateTexturedLitMaterial(new Color(0.95f, 0.95f, 0.95f, 1f), null, null);
-            Material gantryMaterial = CreateTexturedLitMaterial(new Color(0.10f, 0.11f, 0.13f, 1f), null, null);
+            RaceAssetCatalog.LandmarkMaterials landmarkMats = RaceAssetCatalog.BuildLandmarkMaterials();
+            Material paintMaterial = landmarkMats.paint;
+            Material gantryMaterial = landmarkMats.gantry;
 
             BuildStartFinishMarkings(start, startForward, startRight, paintMaterial);
-            BuildStartLightGantry(start + startForward * 8f, startForward, startRight, gantryMaterial, paintMaterial);
-            BuildPitWallAndPaddock(start + startForward * 18f, startForward, startRight, barrierMaterial);
-            BuildSponsorBoards(centerline, barrierMaterial);
+            BuildStartLightGantry(start + startForward * 8f, startForward, startRight, gantryMaterial, paintMaterial, landmarkMats.lightOn, centerline, halfRight, halfLeft, useRibbonWidths);
+            BuildPitWallAndPaddock(start + startForward * 18f, startForward, startRight, barrierMaterial, landmarkMats.paddock, centerline, halfRight, halfLeft, useRibbonWidths);
+            BuildSponsorBoards(centerline, halfRight, halfLeft, useRibbonWidths, barrierMaterial);
         }
 
         void BuildStartFinishMarkings(Vector3 start, Vector3 forward, Vector3 right, Material paintMaterial)
@@ -415,7 +727,7 @@ namespace The21stDriver.Gameplay
             strip.GetComponent<MeshRenderer>().sharedMaterial = material;
         }
 
-        void BuildStartLightGantry(Vector3 anchor, Vector3 forward, Vector3 right, Material gantryMaterial, Material lampMaterial)
+        void BuildStartLightGantry(Vector3 anchor, Vector3 forward, Vector3 right, Material gantryMaterial, Material lampMaterial, Material lightOnMaterial, List<Vector3> trackCenters, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths)
         {
             if (gantryMaterial == null)
             {
@@ -423,25 +735,30 @@ namespace The21stDriver.Gameplay
             }
 
             float halfSpan = 8f;
+            if (useRibbonWidths && trackCenters != null && halfRight != null && halfLeft != null && trackCenters.Count > 0)
+            {
+                int idx = NearestCenterlineIndex(trackCenters, anchor);
+                halfSpan = Mathf.Max(8f, Mathf.Max(halfRight[idx], halfLeft[idx]) + 2f);
+            }
+
             Vector3 leftPole = anchor - right * halfSpan;
             Vector3 rightPole = anchor + right * halfSpan;
 
-            CreateBlock("Gantry_LeftPole", leftPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
-            CreateBlock("Gantry_RightPole", rightPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
-            CreateBlock("Gantry_Beam", anchor + Vector3.up * 9.0f, Quaternion.LookRotation(forward, Vector3.up), new Vector3(0.7f, 0.8f, halfSpan * 2f + 1.5f), gantryMaterial);
+            propFactory.CreateBlock("Gantry_LeftPole", leftPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
+            propFactory.CreateBlock("Gantry_RightPole", rightPole + Vector3.up * 4.6f, Quaternion.identity, new Vector3(0.55f, 9.2f, 0.55f), gantryMaterial);
+            propFactory.CreateBlock("Gantry_Beam", anchor + Vector3.up * 9.0f, Quaternion.LookRotation(forward, Vector3.up), new Vector3(0.7f, 0.8f, halfSpan * 2f + 1.5f), gantryMaterial);
 
-            Material lightOnMaterial = CreateTexturedLitMaterial(new Color(0.88f, 0.14f, 0.14f, 1f), null, null);
             Material lightOffMaterial = lampMaterial ?? gantryMaterial;
             for (int i = 0; i < 5; i++)
             {
                 float normalized = (i - 2f) * 1.35f;
                 Vector3 lightPos = anchor + right * normalized + Vector3.up * 8.35f - forward * 0.5f;
                 Material lightMat = (i == 2) ? lightOnMaterial : lightOffMaterial;
-                CreateBlock("Gantry_Light_" + i, lightPos, Quaternion.identity, new Vector3(0.35f, 0.35f, 0.35f), lightMat);
+                propFactory.CreateBlock("Gantry_Light_" + i, lightPos, Quaternion.identity, new Vector3(0.35f, 0.35f, 0.35f), lightMat);
             }
         }
 
-        void BuildPitWallAndPaddock(Vector3 pitAnchor, Vector3 forward, Vector3 right, Material barrierMaterial)
+        void BuildPitWallAndPaddock(Vector3 pitAnchor, Vector3 forward, Vector3 pitSideRight, Material barrierMaterial, Material paddockMaterial, List<Vector3> trackCenters, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths)
         {
             if (barrierMaterial == null)
             {
@@ -450,15 +767,24 @@ namespace The21stDriver.Gameplay
 
             float sectionLength = Mathf.Max(6f, barrierLengthMeters);
             int sections = Mathf.Max(8, Mathf.RoundToInt(pitWallLengthMeters / sectionLength));
-            Material paddockMaterial = CreateTexturedLitMaterial(new Color(0.36f, 0.38f, 0.42f, 1f), null, null);
-
             for (int i = 0; i < sections; i++)
             {
                 float longitudinal = i * sectionLength;
                 Vector3 basePos = pitAnchor + forward * longitudinal;
-                Vector3 wallPos = basePos + right * pitWallOffsetMeters + Vector3.up * (barrierHeightMeters * 0.5f + 0.1f);
+                float wallLateral = pitWallOffsetMeters;
+                float buildingLateral = pitBuildingOffsetMeters;
+                if (useRibbonWidths && trackCenters != null && halfRight != null && halfLeft != null && trackCenters.Count > 0)
+                {
+                    int idx = NearestCenterlineIndex(trackCenters, basePos);
+                    Vector3 tr = GetTrackRightAtIndex(trackCenters, idx);
+                    float halfTowardPits = Vector3.Dot(pitSideRight, tr) >= 0f ? halfRight[idx] : halfLeft[idx];
+                    wallLateral = halfTowardPits + pitWallClearanceBeyondAsphaltMeters;
+                    buildingLateral = wallLateral + pitPaddockBeyondWallMeters;
+                }
 
-                CreateBlock(
+                Vector3 wallPos = basePos + pitSideRight * wallLateral + Vector3.up * (barrierHeightMeters * 0.5f + 0.1f);
+
+                propFactory.CreateBlock(
                     "PitWall_" + i,
                     wallPos,
                     Quaternion.LookRotation(forward, Vector3.up),
@@ -467,9 +793,9 @@ namespace The21stDriver.Gameplay
 
                 if (i % 3 == 0)
                 {
-                    Vector3 boxPos = basePos + right * pitBuildingOffsetMeters + Vector3.up * 4.2f;
+                    Vector3 boxPos = basePos + pitSideRight * buildingLateral + Vector3.up * 4.2f;
                     float zScale = Mathf.Clamp(sectionLength * 1.05f, 8f, 18f);
-                    CreateBlock(
+                    propFactory.CreateBlock(
                         "PaddockBox_" + i,
                         boxPos,
                         Quaternion.LookRotation(forward, Vector3.up),
@@ -479,21 +805,12 @@ namespace The21stDriver.Gameplay
             }
         }
 
-        void BuildSponsorBoards(List<Vector3> centerline, Material frameMaterial)
+        void BuildSponsorBoards(List<Vector3> centerline, List<float> halfRight, List<float> halfLeft, bool useRibbonWidths, Material frameMaterial)
         {
             if (centerline == null || centerline.Count < 4 || sponsorBoardCount <= 0)
             {
                 return;
             }
-
-            Color[] palette =
-            {
-                new Color(0.85f, 0.10f, 0.10f, 1f),
-                new Color(0.05f, 0.10f, 0.14f, 1f),
-                new Color(0.06f, 0.42f, 0.76f, 1f),
-                new Color(0.85f, 0.63f, 0.08f, 1f),
-                new Color(0.95f, 0.95f, 0.95f, 1f)
-            };
 
             int stride = Mathf.Max(6, centerline.Count / sponsorBoardCount);
             int created = 0;
@@ -509,10 +826,17 @@ namespace The21stDriver.Gameplay
 
                 Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
                 float sideSign = (created % 2 == 0) ? 1f : -1f;
-                Vector3 boardPos = current + right * sideSign * (fenceOffsetMeters + 3f) + Vector3.up * 2.2f;
+                float lateral = fenceOffsetMeters + 3f;
+                if (useRibbonWidths && halfRight != null && halfLeft != null && i < halfRight.Count)
+                {
+                    float halfSide = sideSign > 0f ? halfRight[i] : halfLeft[i];
+                    lateral = halfSide + decorSponsorClearanceBeyondAsphaltMeters;
+                }
 
-                Material boardMaterial = CreateTexturedLitMaterial(palette[created % palette.Length], null, null);
-                CreateBlock(
+                Vector3 boardPos = current + right * sideSign * lateral + Vector3.up * 2.2f;
+
+                Material boardMaterial = RaceAssetCatalog.CreateSponsorBoardMaterial(created);
+                propFactory.CreateBlock(
                     "SponsorBoard_" + created,
                     boardPos,
                     Quaternion.LookRotation(forward * -sideSign, Vector3.up),
@@ -522,7 +846,7 @@ namespace The21stDriver.Gameplay
                 if (frameMaterial != null)
                 {
                     Vector3 framePos = boardPos - right * sideSign * 0.2f;
-                    CreateBlock(
+                    propFactory.CreateBlock(
                         "SponsorFrame_" + created,
                         framePos,
                         Quaternion.LookRotation(forward, Vector3.up),
@@ -534,21 +858,28 @@ namespace The21stDriver.Gameplay
             }
         }
 
-        void CreateBlock(string blockName, Vector3 position, Quaternion rotation, Vector3 scale, Material material)
-        {
-            GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            block.name = blockName;
-            block.transform.SetParent(tracksideDecorRoot, false);
-            block.transform.position = position;
-            block.transform.rotation = rotation;
-            block.transform.localScale = scale;
-            Destroy(block.GetComponent<Collider>());
 
-            MeshRenderer renderer = block.GetComponent<MeshRenderer>();
-            if (material != null)
+
+        bool TryParseTrackGlobalOffset(string[] lines, string trackPathForLog, out Vector3 offset)
+        {
+            offset = Vector3.zero;
+            if (lines == null || lines.Length < 2)
             {
-                renderer.sharedMaterial = material;
+                Debug.LogWarning("Race_Controller: track CSV has fewer than 2 lines: " + trackPathForLog);
+                return false;
             }
+
+            string[] cols = lines[1].Split(',');
+            if (cols.Length < 2 ||
+                !float.TryParse(cols[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float ox) ||
+                !float.TryParse(cols[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float oz))
+            {
+                Debug.LogWarning("Race_Controller: invalid global offset row (line 2) in track CSV: " + trackPathForLog);
+                return false;
+            }
+
+            offset = -new Vector3(ox, 0f, oz);
+            return true;
         }
 
         List<Vector3> BuildCenterline(string[] lines)
@@ -574,157 +905,88 @@ namespace The21stDriver.Gameplay
             return points;
         }
 
-        void CreateGroundPlane(Vector3 boundsMin, Vector3 boundsMax, Material grassMaterial)
+        bool TryBuildRibbonCentersAndHalfWidths(string[] lines, out List<Vector3> centers, out List<float> halfRight, out List<float> halfLeft)
         {
-            if (grassMaterial == null)
+            centers = new List<Vector3>();
+            halfRight = new List<float>();
+            halfLeft = new List<float>();
+            float mult = trackRibbonWidthMultiplier;
+
+            for (int i = 1; i < lines.Length; i++)
             {
-                return;
-            }
-
-            Vector3 center = (boundsMin + boundsMax) * 0.5f;
-            Vector3 size = boundsMax - boundsMin;
-
-            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            ground.name = "Trackside_Grass";
-            ground.transform.SetParent(tracksideDecorRoot, false);
-            ground.transform.position = new Vector3(center.x, -0.12f, center.z);
-            ground.transform.localScale = new Vector3(
-                Mathf.Max(1f, (size.x + groundPaddingMeters) / 10f),
-                1f,
-                Mathf.Max(1f, (size.z + groundPaddingMeters) / 10f));
-
-            Destroy(ground.GetComponent<Collider>());
-            ground.GetComponent<MeshRenderer>().sharedMaterial = grassMaterial;
-        }
-
-        void SpawnBarrierRow(Vector3 center, Quaternion rotation, Vector3 right, float sideSign, Material barrierMaterial, GameObject straightFencePrefab, GameObject curvedFencePrefab, bool useCurvedFence)
-        {
-            float offsetSign = sideSign < 0f ? -1f : 1f;
-            Vector3 barrierPosition = center + right * offsetSign * barrierOffsetMeters + Vector3.up * (barrierHeightMeters * 0.5f);
-
-            GameObject barrier = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            barrier.name = sideSign < 0f ? "Barrier_Left" : "Barrier_Right";
-            barrier.transform.SetParent(tracksideDecorRoot, false);
-            barrier.transform.position = barrierPosition;
-            barrier.transform.rotation = rotation;
-            // 与 LookRotation(forward) 一致：长边放在本地 Z（物体前方），否则会横在赛道切向上。
-            barrier.transform.localScale = new Vector3(barrierThicknessMeters, barrierHeightMeters, barrierLengthMeters);
-            Destroy(barrier.GetComponent<Collider>());
-
-            MeshRenderer barrierRenderer = barrier.GetComponent<MeshRenderer>();
-            if (barrierMaterial != null)
-            {
-                barrierRenderer.sharedMaterial = barrierMaterial;
-            }
-
-            bool pickCurved = useCurvedFence && curvedFencePrefab != null;
-            GameObject fencePrefab = pickCurved ? curvedFencePrefab : straightFencePrefab;
-            if (fencePrefab != null)
-            {
-                Vector3 fencePosition = center + right * offsetSign * fenceOffsetMeters + Vector3.up * fenceVerticalOffset;
-                float sideYaw = pickCurved && offsetSign > 0f ? curvedFenceRightSideExtraYawDegrees : 0f;
-                Quaternion fenceRotation = rotation * Quaternion.Euler(0f, fencePrefabYawOffsetDegrees + sideYaw, 0f);
-                GameObject fence = Instantiate(fencePrefab, fencePosition, fenceRotation, tracksideDecorRoot);
-                fence.transform.localScale = Vector3.one;
-            }
-        }
-
-        void SpawnTireStack(Vector3 center, Vector3 right, float turnSide, Material tireMaterial)
-        {
-            if (tireMaterial == null)
-            {
-                return;
-            }
-
-            float outerSide = turnSide >= 0f ? 1f : -1f;
-            Vector3 basePosition = center + right * outerSide * tireStackOffsetMeters + Vector3.up * 0.5f;
-
-            GameObject stackRoot = new GameObject(turnSide >= 0f ? "TireStack_Right" : "TireStack_Left");
-            stackRoot.transform.SetParent(tracksideDecorRoot, false);
-            stackRoot.transform.position = basePosition;
-
-            for (int row = 0; row < 2; row++)
-            {
-                for (int col = 0; col < 3; col++)
+                string[] c = lines[i].Split(',');
+                if (c.Length < 4)
                 {
-                    GameObject tire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    tire.transform.SetParent(stackRoot.transform, false);
-                    tire.transform.localPosition = new Vector3((col - 1) * 0.55f, row * 0.28f, 0f);
-                    tire.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                    tire.transform.localScale = new Vector3(0.48f, 0.18f, 0.48f);
-                    Destroy(tire.GetComponent<Collider>());
-                    tire.GetComponent<MeshRenderer>().sharedMaterial = tireMaterial;
-                }
-            }
-        }
-
-        Material CreateTexturedLitMaterial(Color tint, Texture2D albedo, Texture2D normalMap)
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            if (shader == null)
-            {
-                return null;
-            }
-
-            Material material = new Material(shader);
-            if (albedo != null)
-            {
-                if (material.HasProperty("_BaseMap"))
-                {
-                    material.SetTexture("_BaseMap", albedo);
+                    continue;
                 }
 
-                if (material.HasProperty("_MainTex"))
+                if (!float.TryParse(c[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float cx) ||
+                    !float.TryParse(c[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float cz) ||
+                    !float.TryParse(c[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float wR) ||
+                    !float.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float wL))
                 {
-                    material.SetTexture("_MainTex", albedo);
+                    continue;
+                }
+
+                centers.Add(new Vector3(cx, 0f, cz) + globalOffset);
+                halfRight.Add(wR * mult);
+                halfLeft.Add(wL * mult);
+            }
+
+            return centers.Count >= 2;
+        }
+
+        static int NearestCenterlineIndex(List<Vector3> centers, Vector3 world)
+        {
+            int best = 0;
+            float bestSqr = float.MaxValue;
+            Vector3 flat = world;
+            flat.y = 0f;
+            for (int i = 0; i < centers.Count; i++)
+            {
+                Vector3 p = centers[i];
+                p.y = 0f;
+                float sqr = (p - flat).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = i;
                 }
             }
 
-            if (normalMap != null && material.HasProperty("_BumpMap"))
-            {
-                material.SetTexture("_BumpMap", normalMap);
-                material.EnableKeyword("_NORMALMAP");
-            }
-
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", tint);
-            }
-
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", tint);
-            }
-
-            return material;
+            return best;
         }
 
-        void ApplyTextureTiling(Material material, Vector2 tiling)
+        static Vector3 GetTrackRightAtIndex(List<Vector3> centers, int i)
         {
-            if (material == null)
+            if (centers == null || centers.Count < 2)
             {
-                return;
+                return Vector3.right;
             }
 
-            if (material.HasProperty("_BaseMap"))
+            i = Mathf.Clamp(i, 0, centers.Count - 1);
+            Vector3 forward;
+            if (i < centers.Count - 1)
             {
-                material.SetTextureScale("_BaseMap", tiling);
+                forward = centers[i + 1] - centers[i];
+            }
+            else
+            {
+                forward = centers[i] - centers[i - 1];
             }
 
-            if (material.HasProperty("_MainTex"))
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-8f)
             {
-                material.SetTextureScale("_MainTex", tiling);
+                return Vector3.right;
             }
 
-            if (material.HasProperty("_BumpMap"))
-            {
-                material.SetTextureScale("_BumpMap", tiling);
-            }
+            forward.Normalize();
+            return Vector3.Cross(Vector3.up, forward).normalized;
         }
+
+
+
     }
 }
+

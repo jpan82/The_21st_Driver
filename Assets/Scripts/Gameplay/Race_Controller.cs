@@ -113,6 +113,9 @@ namespace The21stDriver.Gameplay
         private float globalTime;
         private Transform tracksideDecorRoot;
         private RacePropFactory propFactory;
+        private Vector3 gridAnchor;
+        private Vector3 gridForward;
+        private Vector3 gridRight;
 
         public float GlobalTime => globalTime;
 
@@ -137,32 +140,80 @@ namespace The21stDriver.Gameplay
                 System.Array.Sort(files, System.StringComparer.Ordinal);
                 int limit = (maxCars > 0) ? Mathf.Min(maxCars, files.Length) : files.Length;
                 for (int i = 0; i < limit; i++) {
-                    SpawnCar(files[i]);
+                    SpawnCar(files[i], i);
                 }
             }
         }
 
         void Update() {
+            // Wait 5 seconds to run cars so we can see start of game clearly
+            if (Time.timeSinceLevelLoad < 5f) return; 
+            
             globalTime += Time.deltaTime * speedMultiplier;
         }
 
-        void SpawnCar(string path) {
-            if (carPrefab == null)
-            {
-                Debug.LogWarning("Race_Controller: carPrefab is not assigned; skipping car spawn.");
-                return;
-            }
-
-            DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
-                path, sampleInterval, carYOffset, globalOffset);
-            if (trackData.samples.Count < 2) return;
-
-            GameObject car = Instantiate(carPrefab);
-            car.name = Path.GetFileNameWithoutExtension(path);
-            if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
-
-            car.AddComponent<SmoothMover>().Init(trackData, this);
-        }
+        void SpawnCar(string path, int gridIndex) {
+			if (carPrefab == null) return;
+		
+			DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
+				path, sampleInterval, carYOffset, globalOffset);
+			if (trackData.samples.Count < 2) return;
+		
+			// Material and hierarchy setup
+			Shader lineShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+			Material whitePaintMat = new Material(lineShader) { color = Color.white };
+			GameObject linesRoot = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
+		
+			// Grid position math with F1 STAGGER added back
+			int row = gridIndex / 2; 
+			float f1Stagger = (gridIndex % 2 == 0) ? 0f : gridSpacingMeters * 0.5f;
+			float longitudinal = 8f + (row * gridSpacingMeters) + f1Stagger;
+			float staggerSide = (gridIndex % 2 == 0) ? -3.5f : 3.5f; 
+			float carBodyLength = 5.2f;
+			Vector3 gridPos = gridAnchor 
+				- gridForward * longitudinal
+				+ gridRight * staggerSide
+				- gridForward * carBodyLength;
+			gridPos.y += spawnHeightOffset;
+		
+			// Visual paint strip for start lines
+			GameObject paintStrip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+			paintStrip.transform.SetParent(linesRoot.transform);
+			paintStrip.transform.position = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
+			paintStrip.transform.rotation = Quaternion.LookRotation(gridRight, Vector3.up);
+			paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
+			Destroy(paintStrip.GetComponent<Collider>());
+			paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
+		
+			// Path normalization with a "Straight Start" delay
+			Vector3 recordedStartPos = trackData.samples[0].worldPosition;
+			Vector3 totalOffset = gridPos - recordedStartPos;
+			
+			// Make cars moving from start positions to recorded racing line
+			float mergeDuration = 1.0f; 
+			float stayStraightDelay = 1.0f;
+		
+			for(int s_idx = 0; s_idx < trackData.samples.Count; s_idx++) {
+				var sample = trackData.samples[s_idx];
+				float currentTime = s_idx * sampleInterval;
+				
+				float mergeTime = Mathf.Max(0, currentTime - stayStraightDelay);
+				float mergeFactor = Mathf.Clamp01(1f - (mergeTime / mergeDuration));
+				
+				sample.worldPosition += (totalOffset * mergeFactor);
+				trackData.samples[s_idx] = sample;
+			}
+		
+			// Spawn car and place it on the grid
+			GameObject car = Instantiate(carPrefab);
+			car.name = Path.GetFileNameWithoutExtension(path);
+			if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
+			car.AddComponent<SmoothMover>().Init(trackData, this);
+			
+			// Set position and rotation after Init so they are not overridden
+			car.transform.position = gridPos;
+			car.transform.rotation = Quaternion.LookRotation(gridForward, Vector3.up);
+		}
 
         void BuildTrack(string[] lines) {
             // 丝带路面网格与可选 MeshCollider；材质来自 trackMaterial 或着色器兜底。
@@ -571,6 +622,7 @@ namespace The21stDriver.Gameplay
                 propFactory.CreateBlock(
                     "BannerPanel_" + built,
                     curr + Vector3.up * 6.45f,
+                    // Fix: Ensure we use private variable here as well if needed
                     Quaternion.LookRotation(forward, Vector3.up),
                     new Vector3(panelWidth, 1.5f, 0.08f),
                     bannerMaterial);
@@ -667,6 +719,11 @@ namespace The21stDriver.Gameplay
                 return;
             }
 
+            // Save values for SpawnCar access
+            gridAnchor = start;
+            gridForward = startForward;
+            gridRight = startRight;
+
             RaceAssetCatalog.LandmarkMaterials landmarkMats = RaceAssetCatalog.BuildLandmarkMaterials();
             Material paintMaterial = landmarkMats.paint;
             Material gantryMaterial = landmarkMats.gantry;
@@ -697,7 +754,7 @@ namespace The21stDriver.Gameplay
             for (int i = 0; i < rows; i++)
             {
                 float longitudinal = 8f + i * gridSpacingMeters;
-                float stagger = (i % 2 == 0) ? -1.6f : 1.6f;
+                float stagger = (i % 2 == 0) ? -3.5f : 3.5f; // Updated for realistic car width
                 Vector3 center = start - forward * longitudinal + right * stagger + Vector3.up * 0.02f;
                 CreateGridBox(center, forward, paintMaterial);
             }
@@ -989,4 +1046,3 @@ namespace The21stDriver.Gameplay
 
     }
 }
-

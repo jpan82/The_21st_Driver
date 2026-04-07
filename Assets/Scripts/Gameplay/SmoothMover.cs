@@ -10,31 +10,27 @@ namespace The21stDriver.Gameplay
         private TrajectorySampler sampler;
         private Race_Controller ctrl;
         private float verticalVelocity;
-
+		private float rotationDelayTimer = 0f;
+		private const float ROTATION_DELAY = 2f;
+		
         public void Init(DriverReplayTrack track, Race_Controller controller)
         {
             sampler = new TrajectorySampler(track);
             ctrl = controller;
-
-            if (sampler != null && sampler.IsValid)
-            {
-                Vector3 startPos = sampler.SamplePosition(sampler.StartTime);
-                if (ctrl != null && ctrl.useGroundSpring)
-                {
-                    startPos.y += ctrl.spawnHeightOffset;
-                }
-
-                transform.position = startPos;
-            }
         }
 
         void Update()
         {
             if (sampler == null || !sampler.IsValid) return;
+			
+			float playbackTime = ctrl != null ? ctrl.GlobalTime : 0f;
+			if (playbackTime > 0f)
+			{
+			    rotationDelayTimer += Time.deltaTime;
+			}
 
             float duration = sampler.EndTime - sampler.StartTime;
             float t = sampler.StartTime;
-            float playbackTime = ctrl != null ? ctrl.GlobalTime : 0f;
             if (duration > Mathf.Epsilon)
             {
                 t += playbackTime % duration;
@@ -67,7 +63,7 @@ namespace The21stDriver.Gameplay
             // Horizontal only: replay Y can differ from spring-set Y and would skew yaw.
             Vector3 direction = new Vector3(targetPos.x - currentPos.x, 0f, targetPos.z - currentPos.z).normalized;
 
-            if (direction.sqrMagnitude > 0.001f)
+            if (direction.sqrMagnitude > 0.001f && rotationDelayTimer > ROTATION_DELAY)
             {
                 Quaternion lookRot = Quaternion.LookRotation(direction, Vector3.up);
                 Quaternion targetRotation = Quaternion.Euler(ctrl.fixedXRotation, lookRot.eulerAngles.y, 0f);

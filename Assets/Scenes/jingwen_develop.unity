@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028301, g: 0.22571309, b: 0.30692127, a: 1}
+  m_IndirectSpecularColor: {r: 0.18028356, g: 0.2257137, b: 0.3069222, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -155,12 +155,17 @@ MonoBehaviour:
   carPrefab: {fileID: 7845393771176110750, guid: 84e78b1dcfa6440c0a5e7bd84b6e8a47,
     type: 3}
   trackMaterial: {fileID: 2100000, guid: 8e4c6a2f91bd4e8ab7c3d50123456ef0, type: 2}
+  playerCarPrefab: {fileID: 7845393771176110750, guid: 84e78b1dcfa6440c0a5e7bd84b6e8a47,
+    type: 3}
+  spawnPlayer: 1
+  playerGridIndex: 21
+  playerSpawnHeightOffset: -0.51
   trackFolder: track_data
   trackFileName: Silverstone.csv
   carFolder: f1_motion_dump_with_time
   maxCars: 0
   sampleInterval: 0.05
-  speedMultiplier: 5
+  speedMultiplier: 2
   carYOffset: 0.25
   rotationSmoothness: 10
   fixedXRotation: 0
@@ -173,6 +178,52 @@ MonoBehaviour:
   groundSnapEpsilon: 0.01
   groundSnapVelocity: 0.02
   trackUvMetersPerRepeat: 12
+  trackRibbonWidthMultiplier: 1.5
+  buildTracksideDecor: 1
+  decorSpacingMeters: 24
+  barrierOffsetMeters: 14
+  fenceOffsetMeters: 18
+  decorBarrierClearanceBeyondAsphaltMeters: 2.5
+  decorFenceClearanceBeyondAsphaltMeters: 8
+  decorTireClearanceBeyondAsphaltMeters: 3
+  decorSponsorClearanceBeyondAsphaltMeters: 9
+  groundPaddingMeters: 80
+  barrierLengthMeters: 10
+  barrierHeightMeters: 1.25
+  barrierThicknessMeters: 0.7
+  fenceVerticalOffset: 2.15
+  tireStackOffsetMeters: 20
+  fencePrefabYawOffsetDegrees: 90
+  curvedFenceRightSideExtraYawDegrees: 180
+  enableCurvedFencePrefabs: 0
+  curvedFenceMaxCornerDeg: 8
+  cornerFenceExtraOutwardMeters: 2
+  buildF1EventLandmarks: 1
+  anchorStartFromCarReplay: 1
+  gridRows: 12
+  gridSpacingMeters: 9
+  gridBoxLengthMeters: 5.5
+  gridBoxWidthMeters: 2.4
+  pitWallLengthMeters: 220
+  pitWallOffsetMeters: 11.5
+  pitBuildingOffsetMeters: 26
+  pitWallClearanceBeyondAsphaltMeters: 3
+  pitPaddockBeyondWallMeters: 12
+  sponsorBoardCount: 24
+  buildRaceOperationsProps: 1
+  buildBrakingBoards: 0
+  cornerDetectionAngleDeg: 14
+  cornerPropsMinSpacingMeters: 45
+  brakingBoardOffsetMeters: 8
+  marshalPostOffsetMeters: 10
+  operationsClearanceBeyondAsphaltMeters: 3
+  bannerGateClearanceBeyondAsphaltMeters: 2.5
+  bannerGateCount: 4
+  marshalFlagColor: {r: 0.95, g: 0.78, b: 0.12, a: 1}
+  enforceNoPropsOnTrack: 1
+  enforceTrackClearanceExtraMeters: 0.6
+  fallbackTrackHalfWidthMeters: 14
+  fencePrefabAdditionalOutwardMeters: 1.35
 --- !u!4 &391485783
 Transform:
   m_ObjectHideFlags: 0
@@ -459,16 +510,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameraFixedHeight: 140
   followSmoothness: 5
-  chaseLookAtHeight: 2.5
+  chaseLocalOffset: {x: 0, y: 0.3, z: -2}
+  chaseLookAtHeight: 1
   rotationSmoothness: 6
-  distanceAdjustSpeed: 50
+  distanceAdjustSpeed: 20
   minTopDownHeight: 25
   maxTopDownHeight: 1000
   minChaseDistance: 2
-  maxChaseDistance: 80
+  maxChaseDistance: 30
   switchCarKey: 9
   switchCameraModeKey: 99
   orbitSpeed: 60
+  cameraMode: 0
 --- !u!114 &1970704320
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -482,6 +535,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   postProcessProfile: {fileID: 11400000, guid: a6560a915ef98420e9faacc1c7438823, type: 2}
+  useBundledCc0FromResources: 1
+  panoramicSkyOverride: {fileID: 0}
+  panoramicSkyExposure: 1.05
+  panoramicSkyRotationDegrees: 0
+  concreteAlbedoOverride: {fileID: 0}
+  concreteNormalOverride: {fileID: 0}
+  asphaltAlbedoOverride: {fileID: 0}
+  asphaltNormalOverride: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

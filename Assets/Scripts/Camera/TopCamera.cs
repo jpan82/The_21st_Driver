@@ -15,16 +15,16 @@ namespace The21stDriver.Camera
         public float followSmoothness = 5f;
 
         [Header("跟车视角")]
-        public Vector3 chaseLocalOffset = new Vector3(0f, 2.5f, -8f); // local Z<0 = behind car
-        public float chaseLookAtHeight = 2.5f;
+        public Vector3 chaseLocalOffset = new Vector3(0f, 0.6f, -2f); // local Z<0 = behind car
+        public float chaseLookAtHeight = 0f;
         public float rotationSmoothness = 6f;
 
         [Header("距离控制")]
-        public float distanceAdjustSpeed = 50f;
+        public float distanceAdjustSpeed = 20f;
         public float minTopDownHeight = 25f;
         public float maxTopDownHeight = 1000f;
         public float minChaseDistance = 2f;
-        public float maxChaseDistance = 80f;
+        public float maxChaseDistance = 30f;
 
         [Header("输入")]
         public KeyCode switchCarKey = KeyCode.Tab;
@@ -75,7 +75,10 @@ namespace The21stDriver.Camera
         {
         // Use rotation-only (no scale) so offset values are always in world units
         Vector3 desiredPosition = targetCar.position + targetCar.rotation * chaseLocalOffset;
-        transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * followSmoothness);
+        // Scale follow speed by lag distance so the camera snaps tighter at high speed.
+        float lag = Vector3.Distance(transform.position, desiredPosition);
+        float dynamicSmooth = followSmoothness * Mathf.Max(1f, lag * 0.5f);
+        transform.position = Vector3.Lerp(transform.position, desiredPosition, Time.deltaTime * dynamicSmooth);
 
         Vector3 lookTarget = targetCar.position + Vector3.up * chaseLookAtHeight;
         Quaternion desiredRotation = Quaternion.LookRotation(lookTarget - transform.position, Vector3.up);
@@ -110,6 +113,11 @@ namespace The21stDriver.Camera
         void RefreshTargets()
         {
         allCars.Clear();
+
+        // Player car goes first so the camera defaults to it on start.
+        PlayerCarController player = Object.FindFirstObjectByType<PlayerCarController>();
+        if (player != null)
+            allCars.Add(player.transform);
 
         foreach (SmoothMover m in Object.FindObjectsByType<SmoothMover>(FindObjectsSortMode.None))
         {

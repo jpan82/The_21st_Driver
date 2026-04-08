@@ -27,6 +27,8 @@ namespace The21stDriver.Replay.Visuals
         public float steerSmoothness = 8f;
         [Tooltip("Local axis the steer pivots rotate around. Use Y for RB20, Z for f1_2022_free (GLB Z-up import).")]
         public Vector3 steerAxis = Vector3.up;
+        [Tooltip("Flip the steering direction. Enable on the player car if wheels turn the wrong way.")]
+        public bool invertSteering = false;
 
         [Header("Body Roll")]
         public bool enableBodyRoll = false;
@@ -152,7 +154,7 @@ namespace The21stDriver.Replay.Visuals
 
         if (enableSteering)
         {
-            float targetSteerAngle = Mathf.Clamp(yawRate * steerSensitivity, -maxSteerAngle, maxSteerAngle);
+            float targetSteerAngle = Mathf.Clamp(yawRate * steerSensitivity * (invertSteering ? -1f : 1f), -maxSteerAngle, maxSteerAngle);
             currentSteerAngle = Mathf.Lerp(currentSteerAngle, targetSteerAngle, deltaTime * steerSmoothness);
         }
         else

@@ -14,6 +14,16 @@ namespace The21stDriver.Gameplay
         public GameObject carPrefab;
         public Material trackMaterial;
 
+        [Header("Player Car")]
+        [Tooltip("Prefab for the player-controlled car. Falls back to carPrefab if empty.")]
+        public GameObject playerCarPrefab;
+        [Tooltip("Spawn a player-controlled car at the front of the grid.")]
+        public bool spawnPlayer = true;
+        [Tooltip("Grid slot reserved for the player. 0 = pole position.")]
+        public int playerGridIndex = 0;
+        [Tooltip("Extra Y offset applied only to the player car spawn. Negative moves it down.")]
+        public float playerSpawnHeightOffset = 0f;
+
         [Header("Files")]
         public string trackFolder = "track_data";
         public string trackFileName = "Silverstone.csv";
@@ -117,7 +127,8 @@ namespace The21stDriver.Gameplay
         private Vector3 gridForward;
         private Vector3 gridRight;
 
-        public float GlobalTime => globalTime;
+        public float GlobalTime  => globalTime;
+        public bool  RaceStarted => Time.timeSinceLevelLoad >= 5f;
 
         void Start() {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -135,12 +146,23 @@ namespace The21stDriver.Gameplay
 
             BuildTrack(tLines);
 
+            if (spawnPlayer)
+                SpawnPlayerCar(playerGridIndex);
+
             if (Directory.Exists(cDirPath)) {
                 string[] files = Directory.GetFiles(cDirPath, "*.csv");
                 System.Array.Sort(files, System.StringComparer.Ordinal);
                 int limit = (maxCars > 0) ? Mathf.Min(maxCars, files.Length) : files.Length;
+                // Offset NPC grid indices so they never land on the player's reserved slot.
+                int npcGridOffset = 0;
                 for (int i = 0; i < limit; i++) {
-                    SpawnCar(files[i], i);
+                    int gridIdx = i + npcGridOffset;
+                    if (spawnPlayer && gridIdx == playerGridIndex)
+                    {
+                        npcGridOffset++;
+                        gridIdx++;
+                    }
+                    SpawnCar(files[i], gridIdx);
                 }
             }
         }
@@ -150,6 +172,64 @@ namespace The21stDriver.Gameplay
             if (Time.timeSinceLevelLoad < 5f) return; 
             
             globalTime += Time.deltaTime * speedMultiplier;
+        }
+
+        /// <summary>
+        /// Shared grid-position formula (F1 staggered two-column layout).
+        /// Returns world position; also provides the grid facing rotation.
+        /// </summary>
+        Vector3 ComputeGridPosition(int gridIndex, out Quaternion gridRotation)
+        {
+            int   row          = gridIndex / 2;
+            float f1Stagger    = (gridIndex % 2 == 0) ? 0f : gridSpacingMeters * 0.5f;
+            float longitudinal = 8f + (row * gridSpacingMeters) + f1Stagger;
+            float staggerSide  = (gridIndex % 2 == 0) ? -3.5f : 3.5f;
+            float carBodyLength = 5.2f;
+            Vector3 pos = gridAnchor
+                - gridForward * longitudinal
+                + gridRight   * staggerSide
+                - gridForward * carBodyLength;
+            pos.y += spawnHeightOffset;
+            gridRotation = Quaternion.LookRotation(gridForward, Vector3.up);
+            return pos;
+        }
+
+        // Overload without rotation output for callers that only need the position.
+        Vector3 ComputeGridPosition(int gridIndex)
+        {
+            return ComputeGridPosition(gridIndex, out _);
+        }
+
+        /// <summary>Spawn the player-controlled car at the given grid slot.</summary>
+        void SpawnPlayerCar(int gridIndex)
+        {
+            GameObject prefab = (playerCarPrefab != null) ? playerCarPrefab : carPrefab;
+            if (prefab == null) return;
+
+            Vector3    gridPos = ComputeGridPosition(gridIndex, out Quaternion gridRot);
+            gridPos.y += playerSpawnHeightOffset;
+            GameObject car     = Instantiate(prefab, gridPos, gridRot);
+            car.name = "PlayerCar";
+
+            if (car.TryGetComponent<Rigidbody>(out Rigidbody rb))
+            {
+                rb.isKinematic = true;
+                rb.useGravity  = false;
+            }
+
+            car.AddComponent<PlayerCarController>().Init(this);
+
+            // White paint strip matching the NPC start-line visuals
+            Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            Material  whitePaintMat = new Material(lineShader) { color = Color.white };
+            GameObject linesRoot   = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
+            GameObject paintStrip  = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            paintStrip.transform.SetParent(linesRoot.transform);
+            paintStrip.transform.position   = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
+            paintStrip.transform.rotation   = Quaternion.LookRotation(gridRight, Vector3.up);
+            paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
+            Destroy(paintStrip.GetComponent<Collider>());
+            paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
         }
 
         void SpawnCar(string path, int gridIndex) {
@@ -165,16 +245,7 @@ namespace The21stDriver.Gameplay
 			GameObject linesRoot = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
 		
 			// Grid position math with F1 STAGGER added back
-			int row = gridIndex / 2; 
-			float f1Stagger = (gridIndex % 2 == 0) ? 0f : gridSpacingMeters * 0.5f;
-			float longitudinal = 8f + (row * gridSpacingMeters) + f1Stagger;
-			float staggerSide = (gridIndex % 2 == 0) ? -3.5f : 3.5f; 
-			float carBodyLength = 5.2f;
-			Vector3 gridPos = gridAnchor 
-				- gridForward * longitudinal
-				+ gridRight * staggerSide
-				- gridForward * carBodyLength;
-			gridPos.y += spawnHeightOffset;
+			Vector3 gridPos = ComputeGridPosition(gridIndex);
 		
 			// Visual paint strip for start lines
 			GameObject paintStrip = GameObject.CreatePrimitive(PrimitiveType.Cube);

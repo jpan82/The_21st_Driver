@@ -150,6 +150,7 @@ MonoBehaviour:
   maxSteerAngle: 45
   steerSmoothness: 8
   steerAxis: {x: 1, y: 0, z: 0}
+  invertSteering: 1
   enableBodyRoll: 0
   maxBodyRoll: 4
   bodyRollSmoothness: 6

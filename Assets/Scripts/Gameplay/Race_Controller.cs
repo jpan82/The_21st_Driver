@@ -15,24 +15,18 @@ namespace The21stDriver.Gameplay
         public Material trackMaterial;
 
         [Header("Player Car")]
-        [Tooltip("Prefab for the player-controlled car. Falls back to carPrefab if empty.")]
         public GameObject playerCarPrefab;
-        [Tooltip("Spawn a player-controlled car at the front of the grid.")]
         public bool spawnPlayer = true;
-        [Tooltip("Grid slot reserved for the player. 0 = pole position.")]
         public int playerGridIndex = 0;
-        [Tooltip("Extra Y offset applied only to the player car spawn. Negative moves it down.")]
         public float playerSpawnHeightOffset = 0f;
 
         [Header("Files")]
         public string trackFolder = "track_data";
         public string trackFileName = "Silverstone.csv";
         public string carFolder = "f1_motion_dump";
-        [Tooltip("Max number of cars to spawn. Set to 0 to spawn all.")]
         public int maxCars = 0;
 
         [Header("Playback")]
-        [Tooltip("Only for narrow 7-column reference CSV. Full-race CSV uses SessionTime column.")]
         public float sampleInterval = 0.05f;
         [Range(0.1f, 50f)]
         public float speedMultiplier = 1f;
@@ -41,11 +35,9 @@ namespace The21stDriver.Gameplay
         public float carYOffset = 0.25f;
         public float rotationSmoothness = 10f;
         public float fixedXRotation = -90f;
-        [Tooltip("Spawn replay cars slightly above the track so they settle visually instead of snapping.")]
         public float spawnHeightOffset = 0.8f;
 
         [Header("Half-Physics Y")]
-        [Tooltip("Use ground raycast + spring settling for NPC cars instead of hard Y snapping.")]
         public bool useGroundSpring = true;
         public float groundRaycastStartHeight = 20f;
         public float groundRaycastMaxDistance = 60f;
@@ -54,12 +46,10 @@ namespace The21stDriver.Gameplay
         public float groundSnapEpsilon = 0.01f;
         public float groundSnapVelocity = 0.02f;
 
-        // 赛道丝带网格与半宽倍率：BuildTrack、TrackRibbonMeshFromCsv；UV 见 trackUvMetersPerRepeat。
         [Header("Track Visual")]
         public float trackUvMetersPerRepeat = 12f;
         public float trackRibbonWidthMultiplier = 1.5f;
 
-        // 草地平面、混凝土护栏、Kenney 围栏、轮胎堆：BuildTracksideDecor、SpawnBarrierRow、SpawnTireStack。
         [Header("Trackside Decor")]
         public bool buildTracksideDecor = true;
         public float decorSpacingMeters = 24f;
@@ -81,7 +71,6 @@ namespace The21stDriver.Gameplay
         public float curvedFenceMaxCornerDeg = 8f;
         public float cornerFenceExtraOutwardMeters = 2f;
 
-        // 起终点线、发车格、龙门架、维修墙、赞助牌：BuildF1EventLandmarks 及子方法。
         [Header("F1 Event Dressing")]
         public bool buildF1EventLandmarks = true;
         public bool anchorStartFromCarReplay = true;
@@ -96,7 +85,6 @@ namespace The21stDriver.Gameplay
         public float pitPaddockBeyondWallMeters = 12f;
         public int sponsorBoardCount = 24;
 
-        // 弯道刹车牌、马修塔、赛段横幅门：BuildRaceOperationsProps。
         [Header("F1 Operations Props")]
         public bool buildRaceOperationsProps = true;
         public bool buildBrakingBoards = false;
@@ -109,13 +97,11 @@ namespace The21stDriver.Gameplay
         public int bannerGateCount = 4;
         public Color marshalFlagColor = new Color(0.95f, 0.78f, 0.12f, 1f);
 
-        // 生成后整体外推，避免低位物体压赛道：EnforceTrackClearanceForAllProps、TryKeepBlockOutsideTrack、CreateBlock。
         [Header("Track Clearance")]
         public bool enforceNoPropsOnTrack = true;
         public float enforceTrackClearanceExtraMeters = 0.6f;
         public float fallbackTrackHalfWidthMeters = 14f;
 
-        // Kenney 围栏网格/pivot 相对赛道的额外外移量：SpawnBarrierRow。
         [Header("Fence / Barrier geometry")]
         public float fencePrefabAdditionalOutwardMeters = 1.35f;
 
@@ -132,52 +118,48 @@ namespace The21stDriver.Gameplay
 
         void Start() {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
-
             string tPath = Path.Combine(Application.streamingAssetsPath, trackFolder, trackFileName);
             string cDirPath = Path.Combine(Application.streamingAssetsPath, carFolder);
 
             if (!File.Exists(tPath)) return;
 
             string[] tLines = File.ReadAllLines(tPath);
-            if (!TryParseTrackGlobalOffset(tLines, tPath, out globalOffset))
-            {
-                return;
-            }
+            if (!TryParseTrackGlobalOffset(tLines, tPath, out globalOffset)) return;
 
             BuildTrack(tLines);
 
-            if (spawnPlayer)
-                SpawnPlayerCar(playerGridIndex);
+            if (spawnPlayer) SpawnPlayerCar(playerGridIndex);
 
             if (Directory.Exists(cDirPath)) {
                 string[] files = Directory.GetFiles(cDirPath, "*.csv");
                 System.Array.Sort(files, System.StringComparer.Ordinal);
                 int limit = (maxCars > 0) ? Mathf.Min(maxCars, files.Length) : files.Length;
-                // Offset NPC grid indices so they never land on the player's reserved slot.
                 int npcGridOffset = 0;
                 for (int i = 0; i < limit; i++) {
                     int gridIdx = i + npcGridOffset;
-                    if (spawnPlayer && gridIdx == playerGridIndex)
-                    {
-                        npcGridOffset++;
-                        gridIdx++;
-                    }
+                    if (spawnPlayer && gridIdx == playerGridIndex) { npcGridOffset++; gridIdx++; }
                     SpawnCar(files[i], gridIdx);
                 }
             }
         }
 
         void Update() {
-            // Wait 5 seconds to run cars so we can see start of game clearly
             if (Time.timeSinceLevelLoad < 5f) return; 
-            
             globalTime += Time.deltaTime * speedMultiplier;
         }
 
-        /// <summary>
-        /// Shared grid-position formula (F1 staggered two-column layout).
-        /// Returns world position; also provides the grid facing rotation.
-        /// </summary>
+        // --- NEW HELPER FOR FINDING CSV COLUMNS ---
+        private Dictionary<string, int> GetHeaderMap(string[] lines) {
+            var map = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+            if (lines == null || lines.Length == 0) return map;
+            string[] headers = lines[0].Split(',');
+            for (int i = 0; i < headers.Length; i++) {
+                string key = headers[i].Trim().Replace("\"", "").Replace("# ", "");
+                if (!string.IsNullOrEmpty(key) && !map.ContainsKey(key)) map[key] = i;
+            }
+            return map;
+        }
+
         Vector3 ComputeGridPosition(int gridIndex, out Quaternion gridRotation)
         {
             int   row          = gridIndex / 2;
@@ -194,13 +176,11 @@ namespace The21stDriver.Gameplay
             return pos;
         }
 
-        // Overload without rotation output for callers that only need the position.
         Vector3 ComputeGridPosition(int gridIndex)
         {
             return ComputeGridPosition(gridIndex, out _);
         }
 
-        /// <summary>Spawn the player-controlled car at the given grid slot.</summary>
         void SpawnPlayerCar(int gridIndex)
         {
             GameObject prefab = (playerCarPrefab != null) ? playerCarPrefab : carPrefab;
@@ -219,7 +199,6 @@ namespace The21stDriver.Gameplay
 
             car.AddComponent<PlayerCarController>().Init(this);
 
-            // White paint strip matching the NPC start-line visuals
             Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             Material  whitePaintMat = new Material(lineShader) { color = Color.white };
             GameObject linesRoot   = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
@@ -233,61 +212,119 @@ namespace The21stDriver.Gameplay
         }
 
         void SpawnCar(string path, int gridIndex) {
-			if (carPrefab == null) return;
-		
-			DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
-				path, sampleInterval, carYOffset, globalOffset);
-			if (trackData.samples.Count < 2) return;
-		
-			// Material and hierarchy setup
-			Shader lineShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-			Material whitePaintMat = new Material(lineShader) { color = Color.white };
-			GameObject linesRoot = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
-		
-			// Grid position math with F1 STAGGER added back
-			Vector3 gridPos = ComputeGridPosition(gridIndex);
-		
-			// Visual paint strip for start lines
-			GameObject paintStrip = GameObject.CreatePrimitive(PrimitiveType.Cube);
-			paintStrip.transform.SetParent(linesRoot.transform);
-			paintStrip.transform.position = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
-			paintStrip.transform.rotation = Quaternion.LookRotation(gridRight, Vector3.up);
-			paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
-			Destroy(paintStrip.GetComponent<Collider>());
-			paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
-		
-			// Path normalization with a "Straight Start" delay
-			Vector3 recordedStartPos = trackData.samples[0].worldPosition;
-			Vector3 totalOffset = gridPos - recordedStartPos;
-			
-			// Make cars moving from start positions to recorded racing line
-			float mergeDuration = 1.0f; 
-			float stayStraightDelay = 1.0f;
-		
-			for(int s_idx = 0; s_idx < trackData.samples.Count; s_idx++) {
-				var sample = trackData.samples[s_idx];
-				float currentTime = s_idx * sampleInterval;
-				
-				float mergeTime = Mathf.Max(0, currentTime - stayStraightDelay);
-				float mergeFactor = Mathf.Clamp01(1f - (mergeTime / mergeDuration));
-				
-				sample.worldPosition += (totalOffset * mergeFactor);
-				trackData.samples[s_idx] = sample;
-			}
-		
-			// Spawn car and place it on the grid
-			GameObject car = Instantiate(carPrefab);
-			car.name = Path.GetFileNameWithoutExtension(path);
-			if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
-			car.AddComponent<SmoothMover>().Init(trackData, this);
-			
-			// Set position and rotation after Init so they are not overridden
-			car.transform.position = gridPos;
-			car.transform.rotation = Quaternion.LookRotation(gridForward, Vector3.up);
-		}
+            if (carPrefab == null) return;
+        
+            DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
+                path, sampleInterval, carYOffset, globalOffset);
+            if (trackData.samples.Count < 2) return;
+        
+            Shader lineShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            Material whitePaintMat = new Material(lineShader) { color = Color.white };
+            GameObject linesRoot = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
+        
+            Vector3 gridPos = ComputeGridPosition(gridIndex);
+        
+            GameObject paintStrip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            paintStrip.transform.SetParent(linesRoot.transform);
+            paintStrip.transform.position = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
+            paintStrip.transform.rotation = Quaternion.LookRotation(gridRight, Vector3.up);
+            paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
+            Destroy(paintStrip.GetComponent<Collider>());
+            paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
+        
+            Vector3 recordedStartPos = trackData.samples[0].worldPosition;
+            Vector3 totalOffset = gridPos - recordedStartPos;
+            
+            float mergeDuration = 1.0f; 
+            float stayStraightDelay = 1.0f;
+        
+            for(int s_idx = 0; s_idx < trackData.samples.Count; s_idx++) {
+                var sample = trackData.samples[s_idx];
+                
+                // --- FIX: Use real telemetry time instead of sampleInterval ---
+                float currentTime = sample.sessionTimeSeconds;
+                
+                float mergeTime = Mathf.Max(0, currentTime - stayStraightDelay);
+                float mergeFactor = Mathf.Clamp01(1f - (mergeTime / mergeDuration));
+                
+                sample.worldPosition += (totalOffset * mergeFactor);
+                trackData.samples[s_idx] = sample;
+            }
+        
+            GameObject car = Instantiate(carPrefab);
+            car.name = Path.GetFileNameWithoutExtension(path);
+            if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
+            car.AddComponent<SmoothMover>().Init(trackData, this);
+            
+            car.transform.position = gridPos;
+            car.transform.rotation = Quaternion.LookRotation(gridForward, Vector3.up);
+        }
+
+        // --- UPDATED TRACK PARSERS TO USE HEADER MAP ---
+        bool TryParseTrackGlobalOffset(string[] lines, string trackPathForLog, out Vector3 offset) {
+            offset = Vector3.zero;
+            if (lines == null || lines.Length < 2) return false;
+            
+            var map = GetHeaderMap(lines);
+            int iX = map.ContainsKey("x_m") ? map["x_m"] : 0;
+            int iY = map.ContainsKey("y_m") ? map["y_m"] : 1;
+
+            string[] cols = lines[1].Split(',');
+            if (cols.Length <= Mathf.Max(iX, iY)) return false;
+
+            if (float.TryParse(cols[iX], NumberStyles.Float, CultureInfo.InvariantCulture, out float ox) &&
+                float.TryParse(cols[iY], NumberStyles.Float, CultureInfo.InvariantCulture, out float oz)) {
+                offset = -new Vector3(ox, 0f, oz);
+                return true;
+            }
+            return false;
+        }
+
+        List<Vector3> BuildCenterline(string[] lines) {
+            List<Vector3> points = new List<Vector3>();
+            var map = GetHeaderMap(lines);
+            int iX = map.ContainsKey("x_m") ? map["x_m"] : 0;
+            int iY = map.ContainsKey("y_m") ? map["y_m"] : 1;
+
+            for (int i = 1; i < lines.Length; i++) {
+                string[] cols = lines[i].Split(',');
+                if (cols.Length <= Mathf.Max(iX, iY)) continue;
+                
+                if (float.TryParse(cols[iX], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) && 
+                    float.TryParse(cols[iY], NumberStyles.Float, CultureInfo.InvariantCulture, out float z)) {
+                    points.Add(new Vector3(x, 0f, z) + globalOffset);
+                }
+            }
+            return points;
+        }
+
+        bool TryBuildRibbonCentersAndHalfWidths(string[] lines, out List<Vector3> centers, out List<float> halfRight, out List<float> halfLeft) {
+            centers = new List<Vector3>(); halfRight = new List<float>(); halfLeft = new List<float>();
+            float mult = trackRibbonWidthMultiplier;
+
+            var map = GetHeaderMap(lines);
+            int iX = map.ContainsKey("x_m") ? map["x_m"] : 0;
+            int iY = map.ContainsKey("y_m") ? map["y_m"] : 1;
+            int iWR = map.ContainsKey("w_tr_right_m") ? map["w_tr_right_m"] : 2;
+            int iWL = map.ContainsKey("w_tr_left_m") ? map["w_tr_left_m"] : 3;
+
+            for (int i = 1; i < lines.Length; i++) {
+                string[] c = lines[i].Split(',');
+                if (c.Length <= Mathf.Max(iX, iY, iWR, iWL)) continue;
+
+                if (float.TryParse(c[iX], NumberStyles.Float, CultureInfo.InvariantCulture, out float cx) && 
+                    float.TryParse(c[iY], NumberStyles.Float, CultureInfo.InvariantCulture, out float cz) &&
+                    float.TryParse(c[iWR], NumberStyles.Float, CultureInfo.InvariantCulture, out float wr) && 
+                    float.TryParse(c[iWL], NumberStyles.Float, CultureInfo.InvariantCulture, out float wl)) {
+                    centers.Add(new Vector3(cx, 0f, cz) + globalOffset);
+                    halfRight.Add(wr * mult);
+                    halfLeft.Add(wl * mult);
+                }
+            }
+            return centers.Count >= 2;
+        }
 
         void BuildTrack(string[] lines) {
-            // 丝带路面网格与可选 MeshCollider；材质来自 trackMaterial 或着色器兜底。
             Mesh mesh = TrackRibbonMeshFromCsv.BuildRibbonMesh(
                 lines,
                 globalOffset,
@@ -379,7 +416,6 @@ namespace The21stDriver.Gameplay
                 clearanceHalfLeft,
                 enforceTrackClearanceExtraMeters);
 
-            // CC0_Race 素材加载与材质构造统一从素材目录类读取。
             RaceAssetCatalog.TracksideAssets assets = RaceAssetCatalog.LoadTracksideAssets();
             RaceAssetCatalog.TracksideMaterials tracksideMats = RaceAssetCatalog.BuildTracksideMaterials(assets);
             GameObject straightFencePrefab = assets.straightFencePrefab;
@@ -686,14 +722,11 @@ namespace The21stDriver.Gameplay
 
                 propFactory.CreateBlock("BannerPole_Left_" + built, leftPole + Vector3.up * 3.9f, Quaternion.identity, new Vector3(0.28f, 7.8f, 0.28f), frameMaterial);
                 propFactory.CreateBlock("BannerPole_Right_" + built, rightPole + Vector3.up * 3.9f, Quaternion.identity, new Vector3(0.28f, 7.8f, 0.28f), frameMaterial);
-                // 横幅横梁：LookRotation(forward) 后 scale X 为沿赛道横向跨度。
                 propFactory.CreateBlock("BannerCross_" + built, curr + Vector3.up * 7.6f, Quaternion.LookRotation(forward, Vector3.up), new Vector3(crossHalfZ * 2f + 0.8f, 0.28f, 0.35f), frameMaterial);
                 float panelWidth = Mathf.Max(9.5f, leftDist + rightDist + 1f);
-                // 横幅面板：X=横跨宽度，Y=高度，Z=薄片厚度。
                 propFactory.CreateBlock(
                     "BannerPanel_" + built,
                     curr + Vector3.up * 6.45f,
-                    // Fix: Ensure we use private variable here as well if needed
                     Quaternion.LookRotation(forward, Vector3.up),
                     new Vector3(panelWidth, 1.5f, 0.08f),
                     bannerMaterial);
@@ -790,7 +823,6 @@ namespace The21stDriver.Gameplay
                 return;
             }
 
-            // Save values for SpawnCar access
             gridAnchor = start;
             gridForward = startForward;
             gridRight = startRight;
@@ -825,7 +857,7 @@ namespace The21stDriver.Gameplay
             for (int i = 0; i < rows; i++)
             {
                 float longitudinal = 8f + i * gridSpacingMeters;
-                float stagger = (i % 2 == 0) ? -3.5f : 3.5f; // Updated for realistic car width
+                float stagger = (i % 2 == 0) ? -3.5f : 3.5f; 
                 Vector3 center = start - forward * longitudinal + right * stagger + Vector3.up * 0.02f;
                 CreateGridBox(center, forward, paintMaterial);
             }
@@ -986,84 +1018,6 @@ namespace The21stDriver.Gameplay
             }
         }
 
-
-
-        bool TryParseTrackGlobalOffset(string[] lines, string trackPathForLog, out Vector3 offset)
-        {
-            offset = Vector3.zero;
-            if (lines == null || lines.Length < 2)
-            {
-                Debug.LogWarning("Race_Controller: track CSV has fewer than 2 lines: " + trackPathForLog);
-                return false;
-            }
-
-            string[] cols = lines[1].Split(',');
-            if (cols.Length < 2 ||
-                !float.TryParse(cols[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float ox) ||
-                !float.TryParse(cols[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float oz))
-            {
-                Debug.LogWarning("Race_Controller: invalid global offset row (line 2) in track CSV: " + trackPathForLog);
-                return false;
-            }
-
-            offset = -new Vector3(ox, 0f, oz);
-            return true;
-        }
-
-        List<Vector3> BuildCenterline(string[] lines)
-        {
-            List<Vector3> points = new List<Vector3>();
-            for (int i = 1; i < lines.Length; i++)
-            {
-                string[] columns = lines[i].Split(',');
-                if (columns.Length < 2)
-                {
-                    continue;
-                }
-
-                if (!float.TryParse(columns[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) ||
-                    !float.TryParse(columns[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
-                {
-                    continue;
-                }
-
-                points.Add(new Vector3(x, 0f, z) + globalOffset);
-            }
-
-            return points;
-        }
-
-        bool TryBuildRibbonCentersAndHalfWidths(string[] lines, out List<Vector3> centers, out List<float> halfRight, out List<float> halfLeft)
-        {
-            centers = new List<Vector3>();
-            halfRight = new List<float>();
-            halfLeft = new List<float>();
-            float mult = trackRibbonWidthMultiplier;
-
-            for (int i = 1; i < lines.Length; i++)
-            {
-                string[] c = lines[i].Split(',');
-                if (c.Length < 4)
-                {
-                    continue;
-                }
-
-                if (!float.TryParse(c[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float cx) ||
-                    !float.TryParse(c[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float cz) ||
-                    !float.TryParse(c[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float wR) ||
-                    !float.TryParse(c[3], NumberStyles.Float, CultureInfo.InvariantCulture, out float wL))
-                {
-                    continue;
-                }
-
-                centers.Add(new Vector3(cx, 0f, cz) + globalOffset);
-                halfRight.Add(wR * mult);
-                halfLeft.Add(wL * mult);
-            }
-
-            return centers.Count >= 2;
-        }
-
         static int NearestCenterlineIndex(List<Vector3> centers, Vector3 world)
         {
             int best = 0;
@@ -1112,8 +1066,5 @@ namespace The21stDriver.Gameplay
             forward.Normalize();
             return Vector3.Cross(Vector3.up, forward).normalized;
         }
-
-
-
     }
 }

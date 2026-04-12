@@ -46,15 +46,25 @@ namespace The21stDriver.Gameplay
             pendingSideFrames = 0;
         }
 
+        // Reference speed for commit scaling: 1.0× commit at ≤100 km/h,
+        // halved at 200 km/h, one-third at 300 km/h.
+        private const float COMMIT_SCALE_REFERENCE_MS = 27.78f; // 100 km/h in m/s
+
         public float Step(
             bool inStrategyRange,
             int desiredSide,
             int action,
             float currentLateralOffset,
             float timeNow,
+            float npcSpeedMs,
             Config config,
             System.Func<int, float> actionToLateralTarget)
         {
+            // Scale commit window down at high speed so NPC doesn't over-commit in fast corners.
+            // Formula (from HTANV safeDistance concept): commit ÷ (speed / 100 km/h).
+            float speedFactor = Mathf.Max(1f, npcSpeedMs / COMMIT_SCALE_REFERENCE_MS);
+            float effectiveCommit = config.evadeCommitSeconds / speedFactor;
+
             // 1) Filter side intents through short confirmation.
             UpdatePendingSide(desiredSide);
             bool confirmedSide = pendingSide != 0 && pendingSideFrames >= Mathf.Max(1, config.sideConfirmFrames);
@@ -79,7 +89,7 @@ namespace The21stDriver.Gameplay
                     // Start evade only after side intent is confirmed.
                     if (confirmedSide)
                     {
-                        EnterEvade(action, pendingSide, timeNow, config.evadeCommitSeconds, actionToLateralTarget);
+                        EnterEvade(action, pendingSide, timeNow, effectiveCommit, actionToLateralTarget);
                     }
                     break;
 
@@ -91,7 +101,7 @@ namespace The21stDriver.Gameplay
                         int currentSide = state == State.EvadeLeft ? -1 : 1;
                         if (confirmedSide && pendingSide == -currentSide)
                         {
-                            EnterEvade(action, pendingSide, timeNow, config.evadeCommitSeconds, actionToLateralTarget);
+                            EnterEvade(action, pendingSide, timeNow, effectiveCommit, actionToLateralTarget);
                         }
                         else if (!confirmedSide)
                         {
@@ -104,7 +114,7 @@ namespace The21stDriver.Gameplay
                     // Allow re-entering evade if a fresh side intent is confirmed.
                     if (confirmedSide)
                     {
-                        EnterEvade(action, pendingSide, timeNow, config.evadeCommitSeconds, actionToLateralTarget);
+                        EnterEvade(action, pendingSide, timeNow, effectiveCommit, actionToLateralTarget);
                     }
                     else if (Mathf.Abs(currentLateralOffset) <= config.returnDoneThreshold)
                     {

@@ -115,9 +115,16 @@ namespace The21stDriver.Gameplay
             return true;
         }
 
+        // Half-size of the sliding window used by FindNearestCenterlineIndex.
+        // 40 samples covers ~80 m at typical F1 CSV density (≈1 m/sample) — enough
+        // headroom even at 300 km/h between inference ticks.
+        private const int SEARCH_HALF_WINDOW = 40;
+
         /// <summary>
-        /// Finds nearest centerline index to world position.
-        /// Uses last index as a warm start for temporal coherence.
+        /// Finds nearest centerline index to world position using a sliding window
+        /// around the previous result (O(window) instead of O(N)).
+        /// Falls back to a full scan once if the nearest point escapes the window,
+        /// which re-anchors the warm-start index for subsequent frames.
         /// </summary>
         private int FindNearestCenterlineIndex(Vector3 worldPosition)
         {
@@ -126,16 +133,41 @@ namespace The21stDriver.Gameplay
                 return -1;
             }
 
-            int bestIndex = Mathf.Clamp(lastNearestIndex, 0, centerline.Count - 1);
-            float bestSqr = (centerline[bestIndex] - worldPosition).sqrMagnitude;
+            int n = centerline.Count;
+            int seed = Mathf.Clamp(lastNearestIndex, 0, n - 1);
 
-            for (int i = 0; i < centerline.Count; i++)
+            int bestIndex = seed;
+            float bestSqr = (centerline[seed] - worldPosition).sqrMagnitude;
+
+            int lo = seed - SEARCH_HALF_WINDOW;
+            int hi = seed + SEARCH_HALF_WINDOW;
+
+            for (int i = lo; i <= hi; i++)
             {
-                float sqr = (centerline[i] - worldPosition).sqrMagnitude;
+                // Wrap around for closed-loop tracks.
+                int idx = ((i % n) + n) % n;
+                float sqr = (centerline[idx] - worldPosition).sqrMagnitude;
                 if (sqr < bestSqr)
                 {
                     bestSqr = sqr;
-                    bestIndex = i;
+                    bestIndex = idx;
+                }
+            }
+
+            // If the winner sits at a window boundary the car may have jumped
+            // outside our window (e.g. first frame, teleport). Do one full scan
+            // to re-anchor, then resume windowed search next frame.
+            bool atBoundary = bestIndex == ((lo % n + n) % n) || bestIndex == ((hi % n + n) % n);
+            if (atBoundary)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    float sqr = (centerline[i] - worldPosition).sqrMagnitude;
+                    if (sqr < bestSqr)
+                    {
+                        bestSqr = sqr;
+                        bestIndex = i;
+                    }
                 }
             }
 

@@ -212,6 +212,7 @@ namespace The21stDriver.Gameplay
                 action,
                 lateralOffset,
                 Time.time,
+                currentSpeed,
                 smConfig,
                 StrategyActionToLateralTarget);
 

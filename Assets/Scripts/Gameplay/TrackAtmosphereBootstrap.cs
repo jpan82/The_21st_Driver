@@ -18,7 +18,7 @@ namespace The21stDriver.Gameplay
 
         [SerializeField] private VolumeProfile postProcessProfile;
 
-        [Header("CC0 氛围资源（默认从 Resources/CC0_Race 加载，可拖入覆盖）")]
+        [Header("CC0 atmosphere assets (loaded from Resources/CC0_Race by default, drag in overrides if needed)")]
         [SerializeField] private bool useBundledCc0FromResources = true;
         [SerializeField] private Texture2D panoramicSkyOverride;
         [SerializeField] private float panoramicSkyExposure = 1.05f;
@@ -514,7 +514,11 @@ namespace The21stDriver.Gameplay
             var velocity = particleSystem.velocityOverLifetime;
             velocity.enabled = true;
             velocity.space = ParticleSystemSimulationSpace.World;
+            // Keep X/Y/Z in the same MinMaxCurve mode to avoid
+            // "Particle Velocity curves must all be in the same mode" warnings.
+            velocity.x = new ParticleSystem.MinMaxCurve(0f, 0f);
             velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.05f);
+            velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
             var noise = particleSystem.noise;
             noise.enabled = true;
@@ -555,7 +559,11 @@ namespace The21stDriver.Gameplay
             var velocity = particleSystem.velocityOverLifetime;
             velocity.enabled = true;
             velocity.space = ParticleSystemSimulationSpace.World;
+            // Keep X/Y/Z in the same MinMaxCurve mode to avoid
+            // "Particle Velocity curves must all be in the same mode" warnings.
+            velocity.x = new ParticleSystem.MinMaxCurve(0f, 0f);
             velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.08f);
+            velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
 
             particleSystem.Play();
 

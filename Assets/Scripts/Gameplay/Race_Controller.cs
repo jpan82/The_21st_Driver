@@ -354,7 +354,27 @@ namespace The21stDriver.Gameplay
                 MeshCollider col = obj.AddComponent<MeshCollider>();
                 col.sharedMesh = mesh;
                 col.convex = false;
-                obj.AddComponent<ReplayTrackSurface>();
+                // Expose per-sample track widths to NPC logic for dynamic lateral safety clamping.
+                ReplayTrackSurface trackSurface = obj.AddComponent<ReplayTrackSurface>();
+
+                List<Vector3> centerline;
+                List<float> halfRight;
+                List<float> halfLeft;
+                if (!TryBuildRibbonCentersAndHalfWidths(lines, out centerline, out halfRight, out halfLeft))
+                {
+                    centerline = BuildCenterline(lines);
+                    halfRight = new List<float>(centerline.Count);
+                    halfLeft = new List<float>(centerline.Count);
+                    float fallbackHalfWidth = Mathf.Max(0.5f, fallbackTrackHalfWidthMeters);
+                    for (int i = 0; i < centerline.Count; i++)
+                    {
+                        halfRight.Add(fallbackHalfWidth);
+                        halfLeft.Add(fallbackHalfWidth);
+                    }
+                }
+
+                // Feed either CSV widths or fallback widths to the runtime surface helper.
+                trackSurface.ConfigureWidths(centerline, halfRight, halfLeft, fallbackTrackHalfWidthMeters);
             }
 
             BuildTracksideDecor(lines);

@@ -1,0 +1,117 @@
+{
+  "model_name": "policy_mlp_keep20",
+  "input_dim": 16,
+  "output_dim": 5,
+  "input_features": [
+    {
+      "index": 0,
+      "name": "delta_s",
+      "meaning": "Relative longitudinal distance between target object and current NPC in Frenet s"
+    },
+    {
+      "index": 1,
+      "name": "delta_d",
+      "meaning": "Relative lateral distance between target object and current NPC in Frenet d"
+    },
+    {
+      "index": 2,
+      "name": "delta_v",
+      "meaning": "Relative speed between target object and current NPC"
+    },
+    {
+      "index": 3,
+      "name": "euclid_dist",
+      "meaning": "Euclidean distance between target object and current NPC"
+    },
+    {
+      "index": 4,
+      "name": "Speed",
+      "meaning": "Current NPC speed"
+    },
+    {
+      "index": 5,
+      "name": "Throttle",
+      "meaning": "Current NPC throttle"
+    },
+    {
+      "index": 6,
+      "name": "Brake",
+      "meaning": "Current NPC brake"
+    },
+    {
+      "index": 7,
+      "name": "d_final",
+      "meaning": "Current NPC lateral offset from track centerline"
+    },
+    {
+      "index": 8,
+      "name": "ds_dt",
+      "meaning": "Approximate longitudinal speed in Frenet coordinates"
+    },
+    {
+      "index": 9,
+      "name": "dd_dt",
+      "meaning": "Approximate lateral speed in Frenet coordinates"
+    },
+    {
+      "index": 10,
+      "name": "d2d_dt2",
+      "meaning": "Approximate lateral acceleration in Frenet coordinates"
+    },
+    {
+      "index": 11,
+      "name": "curvature",
+      "meaning": "Local track curvature"
+    },
+    {
+      "index": 12,
+      "name": "turn_sign",
+      "meaning": "Turn direction sign"
+    },
+    {
+      "index": 13,
+      "name": "left_margin",
+      "meaning": "Remaining free space to left track boundary"
+    },
+    {
+      "index": 14,
+      "name": "right_margin",
+      "meaning": "Remaining free space to right track boundary"
+    },
+    {
+      "index": 15,
+      "name": "track_width",
+      "meaning": "Local track width"
+    }
+  ],
+  "output_actions": {
+    "0": {
+      "label": "avoid_left",
+      "meaning": "NPC should move left to avoid nearby interaction risk",
+      "unity_behavior": "Generate a smooth positive lateral offset in d"
+    },
+    "1": {
+      "label": "avoid_right",
+      "meaning": "NPC should move right to avoid nearby interaction risk",
+      "unity_behavior": "Generate a smooth negative lateral offset in d"
+    },
+    "2": {
+      "label": "block_left",
+      "meaning": "NPC should move left to defend against approaching player",
+      "unity_behavior": "Generate a smooth positive lateral offset in d"
+    },
+    "3": {
+      "label": "block_right",
+      "meaning": "NPC should move right to defend against approaching player",
+      "unity_behavior": "Generate a smooth negative lateral offset in d"
+    },
+    "4": {
+      "label": "keep",
+      "meaning": "NPC should keep current line",
+      "unity_behavior": "Keep current reference line, no extra lateral offset"
+    }
+  },
+  "output_type": "classification_logits",
+  "needs_output_denormalization": false,
+  "runtime_note": "Unity should preprocess input using imputer_statistics, mean, and scale, run ONNX inference, take argmax over output logits, map index to action label, then convert action label to target delta_d and finally generate new local x_ref/y_ref."
+}

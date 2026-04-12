@@ -1,20 +1,22 @@
 {
-  "name": "The21stDriver.Gameplay",
-  "rootNamespace": "The21stDriver.Gameplay",
-  "references": [
-    "The21stDriver.Replay",
-    "The21stDriver.Vehicles",
-    "UnityEngine.UI",
-    "Unity.RenderPipelines.Core.Runtime",
-    "Unity.RenderPipelines.Universal.Runtime"
-  ],
-  "includePlatforms": [],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "The21stDriver.Gameplay",
+    "rootNamespace": "The21stDriver.Gameplay",
+    "references": [
+        "The21stDriver.Replay",
+        "The21stDriver.Vehicles",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "MLP_Model",
+        "Unity.Sentis"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

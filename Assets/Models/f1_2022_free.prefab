@@ -66,6 +66,32 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: -6689036041284674117, guid: a53f7dee84902a64ba3540377d7a04ad,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: -7408105255446224109}
   m_SourcePrefab: {fileID: -5645937942226959685, guid: a53f7dee84902a64ba3540377d7a04ad,
     type: 3}
+--- !u!1 &4832275359598238598 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -6689036041284674117, guid: a53f7dee84902a64ba3540377d7a04ad,
+    type: 3}
+  m_PrefabInstance: {fileID: 6927791866436437565}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &-7408105255446224109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4832275359598238598}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99f4f3c96d1d14e2f97c4a263a0828ed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onnxModel: {fileID: 5022602860645237092, guid: ac2e47306754948908660bfdc7acd9bb,
+    type: 3}
+  scalerJson: {fileID: 4900000, guid: 010b504f743c64e26a8bd3acdec09829, type: 3}
+  playerCar: {fileID: 0}

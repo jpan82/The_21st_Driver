@@ -20,14 +20,20 @@ namespace The21stDriver.Gameplay
         [Range(0f, 1f)]
         public float highSpeedSteerScale = 0.35f; // fraction of steerDegPerSec at maxSpeed
 
+        [Header("Track Boundary")]
+        public float outOfBoundsGraceMeters = 1.0f; // must exceed edge by this much to trigger game over
+
         Rigidbody  rb;
         Race_Controller ctrl;
         float      currentSpeed; // signed; + forward
+        ReplayTrackSurface trackSurface;
+        bool isGameOver;
 
         /// <summary>Called by Race_Controller immediately after AddComponent.</summary>
         public void Init(Race_Controller controller)
         {
             ctrl = controller;
+            trackSurface = FindObjectOfType<ReplayTrackSurface>();
         }
 
         void Awake()
@@ -40,6 +46,8 @@ namespace The21stDriver.Gameplay
 
         void FixedUpdate()
         {
+            if (isGameOver) return;
+
             // Mirror the 5-second race-start gate that SmoothMover NPCs observe
             if (ctrl != null && !ctrl.RaceStarted)
             {
@@ -81,8 +89,27 @@ namespace The21stDriver.Gameplay
             Quaternion newRot = rb.rotation * Quaternion.Euler(0f, yawDelta, 0f);
             Vector3    newPos = rb.position + newRot * Vector3.forward * currentSpeed * Time.fixedDeltaTime;
 
+            // --- Out-of-bounds check ---
+            if (trackSurface != null &&
+                trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff))
+            {
+                // maxOff < 0 means car is already past the right edge; minOff > 0 means past the left edge
+                if (maxOff < -outOfBoundsGraceMeters || minOff > outOfBoundsGraceMeters)
+                {
+                    TriggerGameOver();
+                    return;
+                }
+            }
+
             rb.MoveRotation(newRot);
             rb.MovePosition(newPos);
+        }
+
+        void TriggerGameOver()
+        {
+            isGameOver = true;
+            currentSpeed = 0f;
+            if (ctrl != null) ctrl.OnPlayerGameOver();
         }
     }
 }

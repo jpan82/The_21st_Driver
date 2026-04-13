@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using The21stDriver.Replay.Data;
 using The21stDriver.Replay.Importers;
 using The21stDriver.Replay.Track;
@@ -112,9 +113,11 @@ namespace The21stDriver.Gameplay
         private Vector3 gridAnchor;
         private Vector3 gridForward;
         private Vector3 gridRight;
+        private bool isGameOver;
 
         public float GlobalTime  => globalTime;
         public bool  RaceStarted => Time.timeSinceLevelLoad >= 5f;
+        public bool  IsGameOver  => isGameOver;
 
         void Start() {
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -144,8 +147,20 @@ namespace The21stDriver.Gameplay
         }
 
         void Update() {
-            if (Time.timeSinceLevelLoad < 5f) return; 
+            if (Time.timeSinceLevelLoad < 5f) return;
+            if (isGameOver) return;
             globalTime += Time.deltaTime * speedMultiplier;
+        }
+
+        public void OnPlayerGameOver()
+        {
+            if (isGameOver) return;
+            isGameOver = true;
+        }
+
+        public void RestartRace()
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
         // --- NEW HELPER FOR FINDING CSV COLUMNS ---
@@ -198,6 +213,7 @@ namespace The21stDriver.Gameplay
             }
 
             car.AddComponent<PlayerCarController>().Init(this);
+            new GameObject("GameOverUI").AddComponent<GameOverUI>();
 
             Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             Material  whitePaintMat = new Material(lineShader) { color = Color.white };

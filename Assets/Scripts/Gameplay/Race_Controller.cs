@@ -215,6 +215,8 @@ namespace The21stDriver.Gameplay
             car.AddComponent<PlayerCarController>().Init(this);
             new GameObject("GameOverUI").AddComponent<GameOverUI>();
             new GameObject("OutOfBoundsWarningUI").AddComponent<OutOfBoundsWarningUI>();
+            new GameObject("SpeedMeterUI").AddComponent<SpeedMeterUI>();
+            new GameObject("StartLightsUI").AddComponent<StartLightsUI>();
 
             Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             Material  whitePaintMat = new Material(lineShader) { color = Color.white };

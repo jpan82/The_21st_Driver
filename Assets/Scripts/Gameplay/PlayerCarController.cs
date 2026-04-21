@@ -29,6 +29,7 @@ namespace The21stDriver.Gameplay
         ReplayTrackSurface trackSurface;
         bool isGameOver;
         public bool IsOutOfBounds { get; private set; }
+        public float CurrentSpeedMs => currentSpeed;
 
         /// <summary>Called by Race_Controller immediately after AddComponent.</summary>
         public void Init(Race_Controller controller)

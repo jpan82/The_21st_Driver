@@ -28,6 +28,7 @@ namespace The21stDriver.Gameplay
         float      currentSpeed; // signed; + forward
         ReplayTrackSurface trackSurface;
         bool isGameOver;
+        public bool IsOutOfBounds { get; private set; }
 
         /// <summary>Called by Race_Controller immediately after AddComponent.</summary>
         public void Init(Race_Controller controller)
@@ -94,11 +95,11 @@ namespace The21stDriver.Gameplay
                 trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff))
             {
                 // maxOff < 0 means car is already past the right edge; minOff > 0 means past the left edge
-                if (maxOff < -outOfBoundsGraceMeters || minOff > outOfBoundsGraceMeters)
-                {
-                    TriggerGameOver();
-                    return;
-                }
+                IsOutOfBounds = maxOff < -outOfBoundsGraceMeters || minOff > outOfBoundsGraceMeters;
+            }
+            else
+            {
+                IsOutOfBounds = false;
             }
 
             rb.MoveRotation(newRot);

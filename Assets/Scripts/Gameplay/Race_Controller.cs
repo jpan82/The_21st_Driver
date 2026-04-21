@@ -24,7 +24,7 @@ namespace The21stDriver.Gameplay
         [Header("Files")]
         public string trackFolder = "track_data";
         public string trackFileName = "Silverstone.csv";
-        public string carFolder = "f1_motion_dump";
+        public string carFolder = "2025_R/drivers";
         public int maxCars = 0;
 
         [Header("Playback")]
@@ -214,6 +214,7 @@ namespace The21stDriver.Gameplay
 
             car.AddComponent<PlayerCarController>().Init(this);
             new GameObject("GameOverUI").AddComponent<GameOverUI>();
+            new GameObject("OutOfBoundsWarningUI").AddComponent<OutOfBoundsWarningUI>();
 
             Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
             Material  whitePaintMat = new Material(lineShader) { color = Color.white };

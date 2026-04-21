@@ -1,0 +1,37 @@
+NPC Continuous Offset Regression Model Export Notes
+==================================================
+
+Model name: policy_mlp_regression_h4
+Input dim: 16
+Output dim: 1
+
+Input feature order:
+Index 0: delta_s -> Relative longitudinal distance between target object and current NPC in Frenet s
+Index 1: delta_d -> Relative lateral distance between target object and current NPC in Frenet d
+Index 2: delta_v -> Relative speed between target object and current NPC
+Index 3: euclid_dist -> Euclidean distance between target object and current NPC
+Index 4: Speed -> Current NPC speed
+Index 5: Throttle -> Current NPC throttle
+Index 6: Brake -> Current NPC brake
+Index 7: d_final -> Current NPC lateral offset from track centerline
+Index 8: ds_dt -> Approximate longitudinal speed in Frenet coordinates
+Index 9: dd_dt -> Approximate lateral speed in Frenet coordinates
+Index 10: d2d_dt2 -> Approximate lateral acceleration in Frenet coordinates
+Index 11: curvature -> Local track curvature
+Index 12: turn_sign -> Turn direction sign
+Index 13: left_margin -> Remaining free space to left track boundary
+Index 14: right_margin -> Remaining free space to right track boundary
+Index 15: track_width -> Local track width
+
+Output definition:
+Output[0] = delta_d_pred -> Predicted lateral offset increment over a short horizon
+Unity behavior: Use this scalar to build a smoothed lateral target, then update local x_ref/y_ref
+
+Important runtime note:
+1. Unity must build the input vector in exactly the same feature order.
+2. Missing values should be filled using imputer_statistics.
+3. Standardize input using (x - mean) / scale.
+4. ONNX output is a continuous scalar, not classification logits.
+5. Read output[0] as delta_d_pred.
+6. Optionally clip delta_d_pred to a safe range.
+7. Smoothly convert delta_d_pred into d_target, then rebuild local x_ref/y_ref.

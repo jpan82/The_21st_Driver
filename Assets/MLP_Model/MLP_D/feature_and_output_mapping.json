@@ -1,0 +1,96 @@
+{
+  "model_name": "policy_mlp_regression_h4",
+  "input_dim": 16,
+  "output_dim": 1,
+  "input_features": [
+    {
+      "index": 0,
+      "name": "delta_s",
+      "meaning": "Relative longitudinal distance between target object and current NPC in Frenet s"
+    },
+    {
+      "index": 1,
+      "name": "delta_d",
+      "meaning": "Relative lateral distance between target object and current NPC in Frenet d"
+    },
+    {
+      "index": 2,
+      "name": "delta_v",
+      "meaning": "Relative speed between target object and current NPC"
+    },
+    {
+      "index": 3,
+      "name": "euclid_dist",
+      "meaning": "Euclidean distance between target object and current NPC"
+    },
+    {
+      "index": 4,
+      "name": "Speed",
+      "meaning": "Current NPC speed"
+    },
+    {
+      "index": 5,
+      "name": "Throttle",
+      "meaning": "Current NPC throttle"
+    },
+    {
+      "index": 6,
+      "name": "Brake",
+      "meaning": "Current NPC brake"
+    },
+    {
+      "index": 7,
+      "name": "d_final",
+      "meaning": "Current NPC lateral offset from track centerline"
+    },
+    {
+      "index": 8,
+      "name": "ds_dt",
+      "meaning": "Approximate longitudinal speed in Frenet coordinates"
+    },
+    {
+      "index": 9,
+      "name": "dd_dt",
+      "meaning": "Approximate lateral speed in Frenet coordinates"
+    },
+    {
+      "index": 10,
+      "name": "d2d_dt2",
+      "meaning": "Approximate lateral acceleration in Frenet coordinates"
+    },
+    {
+      "index": 11,
+      "name": "curvature",
+      "meaning": "Local track curvature"
+    },
+    {
+      "index": 12,
+      "name": "turn_sign",
+      "meaning": "Turn direction sign"
+    },
+    {
+      "index": 13,
+      "name": "left_margin",
+      "meaning": "Remaining free space to left track boundary"
+    },
+    {
+      "index": 14,
+      "name": "right_margin",
+      "meaning": "Remaining free space to right track boundary"
+    },
+    {
+      "index": 15,
+      "name": "track_width",
+      "meaning": "Local track width"
+    }
+  ],
+  "output_definition": {
+    "index": 0,
+    "name": "delta_d_pred",
+    "meaning": "Predicted lateral offset increment relative to the current state over a short horizon",
+    "unity_behavior": "Use this scalar as a target lateral adjustment, then smoothly update local x_ref and y_ref"
+  },
+  "output_type": "continuous_regression",
+  "needs_output_denormalization": false,
+  "runtime_note": "Unity should preprocess input using imputer_statistics, mean, and scale, run ONNX inference, read output[0] as delta_d_pred, clip if needed, then convert it into a smoothed local d_target and finally rebuild local x_ref/y_ref."
+}

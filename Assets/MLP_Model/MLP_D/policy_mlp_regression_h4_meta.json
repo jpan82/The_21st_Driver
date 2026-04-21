@@ -1,0 +1,34 @@
+{
+  "model_type": "MLPRegressionNet",
+  "feature_cols": [
+    "delta_s",
+    "delta_d",
+    "delta_v",
+    "euclid_dist",
+    "Speed",
+    "Throttle",
+    "Brake",
+    "d_final",
+    "ds_dt",
+    "dd_dt",
+    "d2d_dt2",
+    "curvature",
+    "turn_sign",
+    "left_margin",
+    "right_margin",
+    "track_width"
+  ],
+  "target_col": "target_delta_d",
+  "horizon_frames": 4,
+  "horizon_seconds": 0.8,
+  "loss": "SmoothL1Loss",
+  "metrics": {
+    "mae": 0.7872367721706086,
+    "rmse": 1.3467469764953286,
+    "r2": 0.6890075566431342
+  },
+  "n_samples": 8632520,
+  "train_size": 6906016,
+  "test_size": 1726504,
+  "device": "cuda"
+}

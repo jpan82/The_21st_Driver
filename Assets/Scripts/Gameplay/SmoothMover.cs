@@ -18,12 +18,14 @@ namespace The21stDriver.Gameplay
         private const float ROTATION_DELAY = 2f;
         
         private Model_Script aiModel;
+        private DeltaDModel deltaModel;
         private Vector3 lastPosition;
         private float currentSpeed;
         private int lastAction = -1;
         private float lateralOffset;
         private bool strategyRangeLatched;
         private int heldAction = -1;
+        private float heldDeltaD;
         private float heldActionUntil;
         private float nextInferenceTime;
         private ReplayTrackSurface replayTrackSurface;
@@ -84,6 +86,11 @@ namespace The21stDriver.Gameplay
             if (aiModel == null)
             {
                 Debug.LogWarning($"[Model] {gameObject.name} could not find Model_Script; strategy AI will be disabled.");
+            }
+            deltaModel = GetComponentInChildren<DeltaDModel>();
+            if (deltaModel == null)
+            {
+                Debug.LogWarning($"[DeltaD] {gameObject.name} could not find DeltaDModel; lateral offset will use fixed values.");
             }
             replayTrackSurface = FindObjectOfType<ReplayTrackSurface>();
             evadeStateMachine.Reset();
@@ -163,6 +170,7 @@ namespace The21stDriver.Gameplay
             if (wasInRange && !strategyRangeLatched)
             {
                 heldAction = -1;
+                heldDeltaD = 0f;
                 heldActionUntil = 0f;
                 blendedTargetLateral = 0f;
             }
@@ -179,6 +187,8 @@ namespace The21stDriver.Gameplay
                     {
                         float[] features = BuildAIFeatures();
                         int inferred = aiModel.GetAIAction(features);
+                        if (deltaModel != null)
+                            heldDeltaD = deltaModel.GetDeltaD(features);
                         nextInferenceTime = Time.time + Mathf.Max(0.01f, strategyInferenceInterval);
 
                         if (inferred != lastAction)
@@ -310,9 +320,15 @@ namespace The21stDriver.Gameplay
         }
         /// <summary>
         /// Positive offset = right side of the track plane (flatRight); avoid_left uses negative offset.
+        /// When the regression model is available its delta_d_pred replaces fixed cap/blk values.
         /// </summary>
         private float StrategyActionToLateralTarget(int action)
         {
+            if (action < 0 || action == 4) return 0f; // keep or no action
+
+            if (deltaModel != null)
+                return Mathf.Clamp(heldDeltaD, -strategyMaxLateralOffset, strategyMaxLateralOffset);
+
             float cap = strategyMaxLateralOffset;
             float blk = cap * strategyBlockOffsetScale;
             switch (action)
@@ -321,7 +337,7 @@ namespace The21stDriver.Gameplay
                 case 1: return cap;   // avoid_right
                 case 2: return -blk;  // block_left
                 case 3: return blk;   // block_right
-                default: return 0f;   // keep
+                default: return 0f;
             }
         }
 

@@ -91,8 +91,9 @@ namespace The21stDriver.Gameplay
             Vector3    newPos = rb.position + newRot * Vector3.forward * currentSpeed * Time.fixedDeltaTime;
 
             // --- Out-of-bounds check ---
+            Vector3 carForward = newRot * Vector3.forward;
             if (trackSurface != null &&
-                trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff))
+                trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff, carForward))
             {
                 // maxOff < 0 means car is already past the right edge; minOff > 0 means past the left edge
                 IsOutOfBounds = maxOff < -outOfBoundsGraceMeters || minOff > outOfBoundsGraceMeters;

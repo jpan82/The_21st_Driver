@@ -41,7 +41,7 @@ namespace The21stDriver.Gameplay
                 return false;
             }
 
-            int idx = FindNearestCenterlineIndex(worldPosition);
+            int idx = FindNearestCenterlineIndex(worldPosition, Vector3.zero);
             if (idx < 0 || idx >= centerline.Count)
             {
                 return false;
@@ -65,7 +65,7 @@ namespace The21stDriver.Gameplay
         /// Negative = left, positive = right in local track frame at nearest centerline sample.
         /// Caller can clamp desired offset into [minOffset, maxOffset] to stay inside track with clearance.
         /// </summary>
-        public bool TryGetAdditionalLateralOffsetBounds(Vector3 worldPosition, float edgeClearanceMeters, out float minOffset, out float maxOffset)
+        public bool TryGetAdditionalLateralOffsetBounds(Vector3 worldPosition, float edgeClearanceMeters, out float minOffset, out float maxOffset, Vector3 carForward = default)
         {
             minOffset = -Mathf.Max(0.5f, fallbackHalfWidthMeters);
             maxOffset = Mathf.Max(0.5f, fallbackHalfWidthMeters);
@@ -75,7 +75,7 @@ namespace The21stDriver.Gameplay
                 return false;
             }
 
-            int idx = FindNearestCenterlineIndex(worldPosition);
+            int idx = FindNearestCenterlineIndex(worldPosition, carForward);
             if (idx < 0 || idx >= centerline.Count)
             {
                 return false;
@@ -120,36 +120,50 @@ namespace The21stDriver.Gameplay
         // headroom even at 300 km/h between inference ticks.
         private const int SEARCH_HALF_WINDOW = 40;
 
+        // How strongly to penalize a candidate segment whose direction disagrees with
+        // the car's heading. In metres — a candidate 5 m closer but facing the wrong
+        // way costs this many extra "metres" per unit of (1 - dot). A value of ~20 m
+        // means an opposite-facing parallel straight (dot ≈ -1, penalty = 40 m) will
+        // only win if it is more than 40 m closer, which almost never happens on track.
+        private const float DIRECTION_PENALTY_SCALE = 20f;
+
         /// <summary>
         /// Finds nearest centerline index to world position using a sliding window
         /// around the previous result (O(window) instead of O(N)).
         /// Falls back to a full scan once if the nearest point escapes the window,
         /// which re-anchors the warm-start index for subsequent frames.
+        /// When <paramref name="carForward"/> is non-zero, candidates whose segment
+        /// direction disagrees with the car heading are penalised, preventing the
+        /// search from snapping to a parallel segment on the opposite side of the track.
         /// </summary>
-        private int FindNearestCenterlineIndex(Vector3 worldPosition)
+        private int FindNearestCenterlineIndex(Vector3 worldPosition, Vector3 carForward)
         {
             if (centerline == null || centerline.Count == 0)
             {
                 return -1;
             }
 
+            bool useDirection = carForward.sqrMagnitude > 0.01f;
+            Vector3 carDir = useDirection ? carForward.normalized : Vector3.zero;
+            carDir.y = 0f;
+            if (carDir.sqrMagnitude > 0.01f) carDir.Normalize(); else useDirection = false;
+
             int n = centerline.Count;
             int seed = Mathf.Clamp(lastNearestIndex, 0, n - 1);
 
             int bestIndex = seed;
-            float bestSqr = (centerline[seed] - worldPosition).sqrMagnitude;
+            float bestScore = ScoreCandidate(seed, worldPosition, carDir, useDirection, n);
 
             int lo = seed - SEARCH_HALF_WINDOW;
             int hi = seed + SEARCH_HALF_WINDOW;
 
             for (int i = lo; i <= hi; i++)
             {
-                // Wrap around for closed-loop tracks.
                 int idx = ((i % n) + n) % n;
-                float sqr = (centerline[idx] - worldPosition).sqrMagnitude;
-                if (sqr < bestSqr)
+                float score = ScoreCandidate(idx, worldPosition, carDir, useDirection, n);
+                if (score < bestScore)
                 {
-                    bestSqr = sqr;
+                    bestScore = score;
                     bestIndex = idx;
                 }
             }
@@ -162,10 +176,10 @@ namespace The21stDriver.Gameplay
             {
                 for (int i = 0; i < n; i++)
                 {
-                    float sqr = (centerline[i] - worldPosition).sqrMagnitude;
-                    if (sqr < bestSqr)
+                    float score = ScoreCandidate(i, worldPosition, carDir, useDirection, n);
+                    if (score < bestScore)
                     {
-                        bestSqr = sqr;
+                        bestScore = score;
                         bestIndex = i;
                     }
                 }
@@ -173,6 +187,30 @@ namespace The21stDriver.Gameplay
 
             lastNearestIndex = bestIndex;
             return bestIndex;
+        }
+
+        /// <summary>
+        /// Scoring function for a centerline candidate. Returns distance + optional
+        /// directional penalty so segments facing the wrong way are deprioritised.
+        /// </summary>
+        private float ScoreCandidate(int idx, Vector3 worldPosition, Vector3 carDir, bool useDirection, int n)
+        {
+            float dist = (centerline[idx] - worldPosition).magnitude;
+            if (!useDirection) return dist;
+
+            // Compute the segment forward at this sample.
+            int prev = Mathf.Max(0, idx - 1);
+            int next = Mathf.Min(n - 1, idx + 1);
+            Vector3 segFwd = centerline[next] - centerline[prev];
+            segFwd.y = 0f;
+            if (segFwd.sqrMagnitude < 1e-6f) return dist;
+            segFwd.Normalize();
+
+            // dot in [-1, 1]; facing same direction → dot ≈ 1, penalty ≈ 0.
+            // Facing opposite → dot ≈ -1, penalty ≈ 2 * DIRECTION_PENALTY_SCALE.
+            float dot = Vector3.Dot(carDir, segFwd);
+            float penalty = (1f - dot) * DIRECTION_PENALTY_SCALE;
+            return dist + penalty;
         }
     }
 }

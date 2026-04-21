@@ -79,6 +79,10 @@ namespace The21stDriver.Gameplay
         public float gridSpacingMeters = 9f;
         public float gridBoxLengthMeters = 5.5f;
         public float gridBoxWidthMeters = 2.4f;
+        [Tooltip("发车格矩形白线宽度（米），略粗更易辨认。")]
+        public float gridMarkingLineWidthMeters = 0.12f;
+        [Tooltip("地面标线立方体高度（米），略抬高减轻与路面 Z-fighting。")]
+        public float gridMarkingStripHeightMeters = 0.018f;
         public float pitWallLengthMeters = 220f;
         public float pitWallOffsetMeters = 11.5f;
         public float pitBuildingOffsetMeters = 26f;
@@ -105,6 +109,9 @@ namespace The21stDriver.Gameplay
 
         [Header("Fence / Barrier geometry")]
         public float fencePrefabAdditionalOutwardMeters = 1.35f;
+
+        /// <summary>Matches longitudinal offset in <see cref="ComputeGridPosition"/> (rear of car vs slot).</summary>
+        private const float GridCarBodyLengthMeters = 5.2f;
 
         private Vector3 globalOffset;
         private float globalTime;
@@ -181,11 +188,10 @@ namespace The21stDriver.Gameplay
             float f1Stagger    = (gridIndex % 2 == 0) ? 0f : gridSpacingMeters * 0.5f;
             float longitudinal = 8f + (row * gridSpacingMeters) + f1Stagger;
             float staggerSide  = (gridIndex % 2 == 0) ? -3.5f : 3.5f;
-            float carBodyLength = 5.2f;
             Vector3 pos = gridAnchor
                 - gridForward * longitudinal
                 + gridRight   * staggerSide
-                - gridForward * carBodyLength;
+                - gridForward * GridCarBodyLengthMeters;
             pos.y += spawnHeightOffset;
             gridRotation = Quaternion.LookRotation(gridForward, Vector3.up);
             return pos;
@@ -194,6 +200,12 @@ namespace The21stDriver.Gameplay
         Vector3 ComputeGridPosition(int gridIndex)
         {
             return ComputeGridPosition(gridIndex, out _);
+        }
+
+        /// <summary>World Y for thin track decals (gridAnchor comes from landmark build; cars sit higher via spawnHeightOffset).</summary>
+        float StartPaintSurfaceY()
+        {
+            return gridAnchor.y + 0.04f;
         }
 
         void SpawnPlayerCar(int gridIndex)
@@ -217,17 +229,6 @@ namespace The21stDriver.Gameplay
             new GameObject("OutOfBoundsWarningUI").AddComponent<OutOfBoundsWarningUI>();
             new GameObject("SpeedMeterUI").AddComponent<SpeedMeterUI>();
             new GameObject("StartLightsUI").AddComponent<StartLightsUI>();
-
-            Shader    lineShader   = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            Material  whitePaintMat = new Material(lineShader) { color = Color.white };
-            GameObject linesRoot   = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
-            GameObject paintStrip  = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            paintStrip.transform.SetParent(linesRoot.transform);
-            paintStrip.transform.position   = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
-            paintStrip.transform.rotation   = Quaternion.LookRotation(gridRight, Vector3.up);
-            paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
-            Destroy(paintStrip.GetComponent<Collider>());
-            paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
         }
 
         void SpawnCar(string path, int gridIndex) {
@@ -237,19 +238,7 @@ namespace The21stDriver.Gameplay
                 path, sampleInterval, carYOffset, globalOffset);
             if (trackData.samples.Count < 2) return;
         
-            Shader lineShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            Material whitePaintMat = new Material(lineShader) { color = Color.white };
-            GameObject linesRoot = GameObject.Find("CarStartLinesContainer") ?? new GameObject("CarStartLinesContainer");
-        
             Vector3 gridPos = ComputeGridPosition(gridIndex);
-        
-            GameObject paintStrip = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            paintStrip.transform.SetParent(linesRoot.transform);
-            paintStrip.transform.position = gridPos + gridForward * 3.0f + Vector3.up * 0.05f;
-            paintStrip.transform.rotation = Quaternion.LookRotation(gridRight, Vector3.up);
-            paintStrip.transform.localScale = new Vector3(0.1f, 0.01f, 3.5f);
-            Destroy(paintStrip.GetComponent<Collider>());
-            paintStrip.GetComponent<MeshRenderer>().sharedMaterial = whitePaintMat;
         
             Vector3 recordedStartPos = trackData.samples[0].worldPosition;
             Vector3 totalOffset = gridPos - recordedStartPos;
@@ -870,58 +859,136 @@ namespace The21stDriver.Gameplay
             Material paintMaterial = landmarkMats.paint;
             Material gantryMaterial = landmarkMats.gantry;
 
-            BuildStartFinishMarkings(start, startForward, startRight, paintMaterial);
+            BuildStartFinishMarkings(
+                start,
+                startForward,
+                startRight,
+                paintMaterial,
+                tracksideDecorRoot,
+                centerline,
+                halfRight,
+                halfLeft,
+                useRibbonWidths);
             BuildStartLightGantry(start + startForward * 8f, startForward, startRight, gantryMaterial, paintMaterial, landmarkMats.lightOn, centerline, halfRight, halfLeft, useRibbonWidths);
             BuildPitWallAndPaddock(start + startForward * 18f, startForward, startRight, barrierMaterial, landmarkMats.paddock, centerline, halfRight, halfLeft, useRibbonWidths);
             BuildSponsorBoards(centerline, halfRight, halfLeft, useRibbonWidths, barrierMaterial);
         }
 
-        void BuildStartFinishMarkings(Vector3 start, Vector3 forward, Vector3 right, Material paintMaterial)
+        void BuildStartFinishMarkings(
+            Vector3 start,
+            Vector3 forward,
+            Vector3 right,
+            Material paintMaterial,
+            Transform decorRoot,
+            List<Vector3> trackCenters,
+            List<float> halfRight,
+            List<float> halfLeft,
+            bool useRibbonWidths)
         {
             if (paintMaterial == null)
             {
                 return;
             }
 
+            Transform markingsParent = new GameObject("OnTrack_StartMarkings").transform;
+            markingsParent.SetParent(decorRoot, false);
+
+            float startLineSpan = 13.8f;
+            if (useRibbonWidths && trackCenters != null && halfRight != null && halfLeft != null
+                && trackCenters.Count == halfRight.Count && trackCenters.Count == halfLeft.Count && trackCenters.Count > 0)
+            {
+                int si = NearestCenterlineIndex(trackCenters, start);
+                startLineSpan = Mathf.Clamp(halfRight[si] + halfLeft[si] + 0.9f, 12f, 24f);
+            }
+
+            float paintY = StartPaintSurfaceY();
+            Vector3 linePos = start;
+            linePos.y = paintY;
+
             GameObject line = GameObject.CreatePrimitive(PrimitiveType.Cube);
             line.name = "StartFinish_Line";
-            line.transform.SetParent(tracksideDecorRoot, false);
-            line.transform.position = start + Vector3.up * 0.02f;
+            line.transform.SetParent(markingsParent, false);
+            line.transform.position = linePos;
             line.transform.rotation = Quaternion.LookRotation(forward, Vector3.up);
-            line.transform.localScale = new Vector3(13.8f, 0.02f, 1.0f);
+            line.transform.localScale = new Vector3(startLineSpan, gridMarkingStripHeightMeters, 0.32f);
             Destroy(line.GetComponent<Collider>());
             line.GetComponent<MeshRenderer>().sharedMaterial = paintMaterial;
 
-            int rows = Mathf.Clamp(gridRows, 6, 24);
-            for (int i = 0; i < rows; i++)
+            Material yellowPaint = CloneLandmarkSlotMaterial(paintMaterial, new Color(0.98f, 0.82f, 0.12f, 1f));
+
+            int rowCount = Mathf.Clamp(gridRows, 1, 24);
+            int slotCount = rowCount * 2;
+            float lineW = Mathf.Max(0.04f, gridMarkingLineWidthMeters);
+            for (int slot = 0; slot < slotCount; slot++)
             {
-                float longitudinal = 8f + i * gridSpacingMeters;
-                float stagger = (i % 2 == 0) ? -3.5f : 3.5f; 
-                Vector3 center = start - forward * longitudinal + right * stagger + Vector3.up * 0.02f;
-                CreateGridBox(center, forward, paintMaterial);
+                Vector3 center = GetGridSlotMarkingCenter(slot);
+                Material slotMat = (slot % 2 == 0) ? paintMaterial : yellowPaint;
+                Transform slotRoot = new GameObject("GridSlot_" + slot.ToString("D2")).transform;
+                slotRoot.SetParent(markingsParent, false);
+                CreateGridBox(center, forward, slotMat, slotRoot, lineW);
             }
         }
 
-        void CreateGridBox(Vector3 center, Vector3 forward, Material paintMaterial)
+        static Material CloneLandmarkSlotMaterial(Material source, Color tint)
         {
-            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
-            float halfLen = gridBoxLengthMeters * 0.5f;
-            float halfWid = gridBoxWidthMeters * 0.5f;
-            float lineWidth = 0.08f;
+            Material m = new Material(source);
+            if (m.HasProperty("_BaseColor"))
+            {
+                m.SetColor("_BaseColor", tint);
+            }
 
-            CreateMarkingStrip(center + forward * halfLen, forward, right, gridBoxWidthMeters, lineWidth, paintMaterial);
-            CreateMarkingStrip(center - forward * halfLen, forward, right, gridBoxWidthMeters, lineWidth, paintMaterial);
-            CreateMarkingStrip(center - right * halfWid, right, forward, gridBoxLengthMeters, lineWidth, paintMaterial);
-            CreateMarkingStrip(center + right * halfWid, right, forward, gridBoxLengthMeters, lineWidth, paintMaterial);
+            if (m.HasProperty("_Color"))
+            {
+                m.SetColor("_Color", tint);
+            }
+
+            return m;
         }
 
-        void CreateMarkingStrip(Vector3 center, Vector3 forwardAxis, Vector3 sideAxis, float length, float width, Material material)
+        /// <summary>Rectangle center on asphalt, aligned with <see cref="ComputeGridPosition"/> slot layout.</summary>
+        Vector3 GetGridSlotMarkingCenter(int gridIndex)
+        {
+            int row = gridIndex / 2;
+            float f1Stagger = (gridIndex % 2 == 0) ? 0f : gridSpacingMeters * 0.5f;
+            float longitudinal = 8f + (row * gridSpacingMeters) + f1Stagger;
+            float staggerSide = (gridIndex % 2 == 0) ? -3.5f : 3.5f;
+            Vector3 rear = gridAnchor
+                - gridForward * longitudinal
+                + gridRight * staggerSide
+                - gridForward * GridCarBodyLengthMeters;
+            Vector3 mid = rear + gridForward * (GridCarBodyLengthMeters * 0.5f);
+            mid.y = StartPaintSurfaceY();
+            return mid;
+        }
+
+        void CreateGridBox(Vector3 center, Vector3 forward, Material paintMaterial, Transform slotRoot, float lineWidth)
+        {
+            Vector3 r = Vector3.Cross(Vector3.up, forward).normalized;
+            float halfLen = gridBoxLengthMeters * 0.5f;
+            float halfWid = gridBoxWidthMeters * 0.5f;
+            float h = gridMarkingStripHeightMeters;
+
+            CreateMarkingStrip(center + forward * halfLen, forward, r, gridBoxWidthMeters, lineWidth, paintMaterial, slotRoot, h);
+            CreateMarkingStrip(center - forward * halfLen, forward, r, gridBoxWidthMeters, lineWidth, paintMaterial, slotRoot, h);
+            CreateMarkingStrip(center - r * halfWid, r, forward, gridBoxLengthMeters, lineWidth, paintMaterial, slotRoot, h);
+            CreateMarkingStrip(center + r * halfWid, r, forward, gridBoxLengthMeters, lineWidth, paintMaterial, slotRoot, h);
+        }
+
+        void CreateMarkingStrip(
+            Vector3 center,
+            Vector3 forwardAxis,
+            Vector3 sideAxis,
+            float length,
+            float width,
+            Material material,
+            Transform parent,
+            float heightY)
         {
             GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            strip.transform.SetParent(tracksideDecorRoot, false);
+            strip.transform.SetParent(parent, false);
             strip.transform.position = center;
             strip.transform.rotation = Quaternion.LookRotation(forwardAxis, Vector3.up);
-            strip.transform.localScale = new Vector3(width, 0.02f, length);
+            strip.transform.localScale = new Vector3(width, heightY, length);
             Destroy(strip.GetComponent<Collider>());
             strip.GetComponent<MeshRenderer>().sharedMaterial = material;
         }

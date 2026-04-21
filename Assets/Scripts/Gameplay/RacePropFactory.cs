@@ -214,6 +214,12 @@ namespace The21stDriver.Gameplay
                     continue;
                 }
 
+                // Start/finish paint and grid boxes are meant to sit on asphalt; do not shove them to the grass.
+                if (child.name == "OnTrack_StartMarkings")
+                {
+                    continue;
+                }
+
                 if (!TryGetHierarchyBounds(child, out Bounds bounds))
                 {
                     continue;

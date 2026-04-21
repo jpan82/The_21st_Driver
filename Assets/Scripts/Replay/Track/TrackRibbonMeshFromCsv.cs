@@ -33,6 +33,49 @@ namespace The21stDriver.Replay.Track
             bool hasPrevCenter = false;
             float uScale = 1f / Mathf.Max(0.01f, uvMetersPerRepeat);
 
+            // For CSV that duplicates the first row at the end to close the loop, the last row must
+            // use the same tangent as the first row so ribbon edges meet (otherwise a triangular gap).
+            Vector3 firstRibbonCenter = Vector3.zero;
+            Vector3 firstRibbonForward = Vector3.forward;
+            bool haveFirstRibbonForward = false;
+            bool scannedFirstRibbon = false;
+            for (int j = 1; j < lines.Length && !scannedFirstRibbon; j++)
+            {
+                string[] fj = lines[j].Split(',');
+                if (fj.Length < 4 ||
+                    !TryParse(fj[0], out float fx) || !TryParse(fj[1], out float fz) ||
+                    !TryParse(fj[2], out _) || !TryParse(fj[3], out _))
+                {
+                    continue;
+                }
+
+                Vector3 fc = new Vector3(fx, 0f, fz) + centerOffset;
+                firstRibbonCenter = fc;
+                for (int k = j + 1; k < lines.Length; k++)
+                {
+                    string[] fk = lines[k].Split(',');
+                    if (fk.Length < 2 ||
+                        !TryParse(fk[0], out float nx) || !TryParse(fk[1], out float nz))
+                    {
+                        continue;
+                    }
+
+                    Vector3 nextC = new Vector3(nx, 0f, nz) + centerOffset;
+                    Vector3 delta = nextC - fc;
+                    if (delta.sqrMagnitude > 1e-10f)
+                    {
+                        firstRibbonForward = delta.normalized;
+                        haveFirstRibbonForward = true;
+                    }
+
+                    break;
+                }
+
+                scannedFirstRibbon = true;
+            }
+
+            const float loopCloseCenterEps = 0.35f;
+
             for (int i = 1; i < lines.Length; i++)
             {
                 string[] c = lines[i].Split(',');
@@ -50,6 +93,7 @@ namespace The21stDriver.Replay.Track
                 Vector3 center = new Vector3(cx, 0f, cz) + centerOffset;
 
                 Vector3 forward = Vector3.forward;
+                bool haveNextTangent = false;
                 if (i < lines.Length - 1)
                 {
                     string[] n = lines[i + 1].Split(',');
@@ -58,7 +102,29 @@ namespace The21stDriver.Replay.Track
                         TryParse(n[1], out float nz))
                     {
                         Vector3 next = new Vector3(nx, 0f, nz) + centerOffset;
-                        forward = (next - center).normalized;
+                        Vector3 toNext = next - center;
+                        if (toNext.sqrMagnitude > 1e-10f)
+                        {
+                            forward = toNext.normalized;
+                            haveNextTangent = true;
+                        }
+                    }
+                }
+
+                if (!haveNextTangent)
+                {
+                    if (haveFirstRibbonForward &&
+                        Vector3.Distance(center, firstRibbonCenter) < loopCloseCenterEps)
+                    {
+                        forward = firstRibbonForward;
+                    }
+                    else if (hasPrevCenter)
+                    {
+                        Vector3 alongStrip = center - prevCenter;
+                        if (alongStrip.sqrMagnitude > 1e-10f)
+                        {
+                            forward = alongStrip.normalized;
+                        }
                     }
                 }
 

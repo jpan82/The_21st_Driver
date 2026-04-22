@@ -32,6 +32,28 @@ namespace The21stDriver.Gameplay
         private float lateralVelocity;
         private float blendedTargetLateral;
         private readonly EvadeStateMachine evadeStateMachine = new EvadeStateMachine();
+        private Vector3 baseSmoothedPosition;
+        private Vector3 baseSmoothVelocity;
+        private bool baseSmoothInitialized;
+        private Vector3 lookSmoothedPosition;
+        private Vector3 lookSmoothVelocity;
+        private bool lookSmoothInitialized;
+        private Vector3 smoothedHorizontalForward;
+        private bool smoothedHorizontalForwardInitialized;
+        private float outputSmoothVelX;
+        private float outputSmoothVelZ;
+        private bool outputHorizontalSmoothInitialized;
+
+        [Header("Replay base trajectory")]
+        [Tooltip(">0 时对 base 与 look-ahead 采样点做 SmoothDamp（秒）；必须与 look 同步否则车头会抖")]
+        public float baseTrajectorySmoothTime = 0.1f;
+        [Tooltip("用 base 之后多少秒的采样点定车头方向；略大可减轻朝向上的微抖")]
+        [Range(0.02f, 0.35f)]
+        public float replayLookaheadSeconds = 0.1f;
+        [Tooltip(">0 时在水平面内对前向再做 Slerp 滤波（秒时间常数），减轻残余高频摆头")]
+        public float horizontalForwardSmoothTau = 0.055f;
+        [Tooltip("写入 Transform 前对 XZ 再轻量 SmoothDamp；压低微抖，略增加贴地滞后")]
+        public float outputHorizontalSmoothTime = 0.035f;
 
         [Header("Strategy Lateral Offset (Historical Trajectory)")]
         [Tooltip("Enter strategy influence radius (meters). Inside this radius, lateral offset follows model actions.")]
@@ -78,6 +100,14 @@ namespace The21stDriver.Gameplay
         {
             sampler = new TrajectorySampler(track);
             ctrl = controller;
+            baseSmoothInitialized = false;
+            baseSmoothVelocity = Vector3.zero;
+            lookSmoothInitialized = false;
+            lookSmoothVelocity = Vector3.zero;
+            smoothedHorizontalForwardInitialized = false;
+            outputHorizontalSmoothInitialized = false;
+            outputSmoothVelX = 0f;
+            outputSmoothVelZ = 0f;
         }
 
         void Start()
@@ -116,14 +146,82 @@ namespace The21stDriver.Gameplay
             }
 
             Vector3 basePos = sampler.SamplePosition(t);
-            float lookT = Mathf.Min(t + 0.05f, sampler.EndTime);
-            Vector3 lookPos = sampler.SamplePosition(lookT);
+            float lookAhead = Mathf.Clamp(replayLookaheadSeconds, 0.02f, 0.35f);
+            float lookT = Mathf.Min(t + lookAhead, sampler.EndTime);
+            Vector3 lookPosRaw = sampler.SamplePosition(lookT);
+
+            if (baseTrajectorySmoothTime > 1e-4f)
+            {
+                if (!baseSmoothInitialized)
+                {
+                    baseSmoothedPosition = basePos;
+                    baseSmoothInitialized = true;
+                }
+
+                baseSmoothedPosition = Vector3.SmoothDamp(
+                    baseSmoothedPosition,
+                    basePos,
+                    ref baseSmoothVelocity,
+                    baseTrajectorySmoothTime,
+                    float.PositiveInfinity,
+                    Time.deltaTime);
+                basePos = baseSmoothedPosition;
+
+                if (!lookSmoothInitialized)
+                {
+                    lookSmoothedPosition = lookPosRaw;
+                    lookSmoothInitialized = true;
+                }
+
+                lookSmoothedPosition = Vector3.SmoothDamp(
+                    lookSmoothedPosition,
+                    lookPosRaw,
+                    ref lookSmoothVelocity,
+                    baseTrajectorySmoothTime,
+                    float.PositiveInfinity,
+                    Time.deltaTime);
+            }
+            else
+            {
+                baseSmoothInitialized = false;
+                baseSmoothVelocity = Vector3.zero;
+                lookSmoothInitialized = false;
+                lookSmoothVelocity = Vector3.zero;
+            }
+
+            Vector3 lookPos = baseTrajectorySmoothTime > 1e-4f ? lookSmoothedPosition : lookPosRaw;
             Vector3 flatFwd = new Vector3(lookPos.x - basePos.x, 0f, lookPos.z - basePos.z);
             if (flatFwd.sqrMagnitude < 1e-6f)
             {
                 flatFwd = new Vector3(transform.forward.x, 0f, transform.forward.z);
             }
             flatFwd.Normalize();
+
+            if (horizontalForwardSmoothTau > 1e-5f)
+            {
+                float fdt = Time.deltaTime;
+                float alpha = 1f - Mathf.Exp(-fdt / horizontalForwardSmoothTau);
+                alpha = Mathf.Clamp01(alpha);
+                if (!smoothedHorizontalForwardInitialized)
+                {
+                    smoothedHorizontalForward = flatFwd;
+                    smoothedHorizontalForwardInitialized = true;
+                }
+                else
+                {
+                    smoothedHorizontalForward = Vector3.Slerp(smoothedHorizontalForward, flatFwd, alpha);
+                }
+
+                if (smoothedHorizontalForward.sqrMagnitude > 1e-8f)
+                {
+                    flatFwd = smoothedHorizontalForward.normalized;
+                }
+            }
+            else
+            {
+                smoothedHorizontalForwardInitialized = false;
+            }
+
             Vector3 flatRight = Vector3.Cross(Vector3.up, flatFwd);
 
             // 2) Resolve player target for AI features.
@@ -284,13 +382,44 @@ namespace The21stDriver.Gameplay
                 currentPos.y = newY;
             }
 
+            if (outputHorizontalSmoothTime > 1e-4f)
+            {
+                float odt = Time.deltaTime;
+                float tau = Mathf.Max(0.008f, outputHorizontalSmoothTime);
+                if (!outputHorizontalSmoothInitialized)
+                {
+                    outputSmoothVelX = 0f;
+                    outputSmoothVelZ = 0f;
+                    outputHorizontalSmoothInitialized = true;
+                }
+
+                currentPos.x = Mathf.SmoothDamp(
+                    transform.position.x,
+                    currentPos.x,
+                    ref outputSmoothVelX,
+                    tau,
+                    float.PositiveInfinity,
+                    odt);
+                currentPos.z = Mathf.SmoothDamp(
+                    transform.position.z,
+                    currentPos.z,
+                    ref outputSmoothVelZ,
+                    tau,
+                    float.PositiveInfinity,
+                    odt);
+            }
+            else
+            {
+                outputHorizontalSmoothInitialized = false;
+                outputSmoothVelX = 0f;
+                outputSmoothVelZ = 0f;
+            }
+
             transform.position = currentPos;
 
-            Vector3 direction = new Vector3(lookPos.x - basePos.x, 0f, lookPos.z - basePos.z).normalized;
-
-            if (direction.sqrMagnitude > 0.001f && rotationDelayTimer > ROTATION_DELAY)
+            if (flatFwd.sqrMagnitude > 0.001f && rotationDelayTimer > ROTATION_DELAY && ctrl != null)
             {
-                Quaternion lookRot = Quaternion.LookRotation(direction, Vector3.up);
+                Quaternion lookRot = Quaternion.LookRotation(flatFwd, Vector3.up);
                 Quaternion targetRotation = Quaternion.Euler(ctrl.fixedXRotation, lookRot.eulerAngles.y, 0f);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * ctrl.rotationSmoothness);
             }
@@ -358,6 +487,10 @@ namespace The21stDriver.Gameplay
 
         void OnValidate()
         {
+            baseTrajectorySmoothTime = Mathf.Max(0f, baseTrajectorySmoothTime);
+            replayLookaheadSeconds = Mathf.Clamp(replayLookaheadSeconds, 0.02f, 0.35f);
+            horizontalForwardSmoothTau = Mathf.Max(0f, horizontalForwardSmoothTau);
+            outputHorizontalSmoothTime = Mathf.Max(0f, outputHorizontalSmoothTime);
             strategyProximityRadius = Mathf.Max(0.1f, strategyProximityRadius);
             strategyProximityExitRadius = Mathf.Max(strategyProximityRadius + 0.1f, strategyProximityExitRadius);
             strategyMaxLateralOffset = Mathf.Max(0f, strategyMaxLateralOffset);

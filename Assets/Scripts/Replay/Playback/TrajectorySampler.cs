@@ -8,6 +8,7 @@ namespace The21stDriver.Replay.Playback
     {
         private const float CentripetalAlpha = 0.5f;
         private const float MinParameterStep = 0.0001f;
+        private const float MinSegmentDuration = 1e-5f;
 
         private readonly DriverReplayTrack track;
         private int lastSegmentIndex;
@@ -96,18 +97,18 @@ namespace The21stDriver.Replay.Playback
 
         if (sessionTimeSeconds <= StartTime)
         {
-            segmentIndex = 0;
-            current = track.samples[0];
-            next = track.samples[1];
+            segmentIndex = AdvanceToPositiveDurationSegment(0);
+            current = track.samples[segmentIndex];
+            next = track.samples[segmentIndex + 1];
             return true;
         }
 
         if (sessionTimeSeconds >= EndTime)
         {
             int lastIndex = track.samples.Count - 1;
-            segmentIndex = lastIndex - 1;
-            current = track.samples[lastIndex - 1];
-            next = track.samples[lastIndex];
+            segmentIndex = FindLastPositiveDurationSegmentStart(lastIndex);
+            current = track.samples[segmentIndex];
+            next = track.samples[segmentIndex + 1];
             t = 1f;
             return true;
         }
@@ -118,12 +119,13 @@ namespace The21stDriver.Replay.Playback
             segmentIndex = FindSegmentIndex(sessionTimeSeconds);
         }
 
+        segmentIndex = AdvanceToPositiveDurationSegment(segmentIndex);
         lastSegmentIndex = segmentIndex;
         current = track.samples[segmentIndex];
         next = track.samples[segmentIndex + 1];
 
         float duration = next.sessionTimeSeconds - current.sessionTimeSeconds;
-        if (duration <= Mathf.Epsilon)
+        if (duration <= MinSegmentDuration)
         {
             t = 0f;
             return true;
@@ -131,6 +133,40 @@ namespace The21stDriver.Replay.Playback
 
         t = Mathf.Clamp01((sessionTimeSeconds - current.sessionTimeSeconds) / duration);
         return true;
+        }
+
+        private int AdvanceToPositiveDurationSegment(int startIndex)
+        {
+            int i = Mathf.Clamp(startIndex, 0, track.samples.Count - 2);
+            while (i < track.samples.Count - 2)
+            {
+                float duration = track.samples[i + 1].sessionTimeSeconds - track.samples[i].sessionTimeSeconds;
+                if (duration > MinSegmentDuration)
+                {
+                    return i;
+                }
+
+                i++;
+            }
+
+            return Mathf.Max(0, track.samples.Count - 2);
+        }
+
+        private int FindLastPositiveDurationSegmentStart(int lastSampleIndex)
+        {
+            int i = Mathf.Clamp(lastSampleIndex - 1, 0, track.samples.Count - 2);
+            while (i > 0)
+            {
+                float duration = track.samples[i + 1].sessionTimeSeconds - track.samples[i].sessionTimeSeconds;
+                if (duration > MinSegmentDuration)
+                {
+                    return i;
+                }
+
+                i--;
+            }
+
+            return 0;
         }
 
         private bool IsTimeWithinSegment(float sessionTimeSeconds, int segmentIndex)

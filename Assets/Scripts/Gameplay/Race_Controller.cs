@@ -32,6 +32,13 @@ namespace The21stDriver.Gameplay
         [Range(0.1f, 50f)]
         public float speedMultiplier = 1f;
 
+        [Header("Replay telemetry")]
+        [Tooltip("开启后用 CSV Speed 门控夹紧几何速度尖峰（减轻瞬移；关闭则仍排序去重并读入 Speed）")]
+        public bool replaySpeedOutlierRepair = true;
+        [Range(0, 3)]
+        [Tooltip("导入时对 x_ref/y_ref 水平轨迹做轻度平滑遍数，抑制 Catmull-Rom 放大的高频抖动")]
+        public int replayXzImportSmoothPasses = 1;
+
         [Header("Car Alignment")]
         public float carYOffset = 0.25f;
         public float rotationSmoothness = 10f;
@@ -235,7 +242,12 @@ namespace The21stDriver.Gameplay
             if (carPrefab == null) return;
         
             DriverReplayTrack trackData = FastF1CsvImporter.LoadDriverCsvForRaceController(
-                path, sampleInterval, carYOffset, globalOffset);
+                path,
+                sampleInterval,
+                carYOffset,
+                globalOffset,
+                replayXzImportSmoothPasses,
+                replaySpeedOutlierRepair);
             if (trackData.samples.Count < 2) return;
         
             Vector3 gridPos = ComputeGridPosition(gridIndex);
@@ -784,7 +796,12 @@ namespace The21stDriver.Gameplay
             for (int i = 0; i < limit; i++)
             {
                 DriverReplayTrack t = FastF1CsvImporter.LoadDriverCsvForRaceController(
-                    files[i], sampleInterval, carYOffset, globalOffset);
+                    files[i],
+                    sampleInterval,
+                    carYOffset,
+                    globalOffset,
+                    replayXzImportSmoothPasses,
+                    replaySpeedOutlierRepair);
                 if (t.samples.Count < 2)
                 {
                     continue;

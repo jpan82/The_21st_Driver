@@ -38,7 +38,12 @@ namespace The21stDriver.Gameplay
 
             float[] normalized = new float[16];
             for (int i = 0; i < 16; i++)
-                normalized[i] = (rawFeatures[i] - scaler.mean[i]) / scaler.scale[i];
+            {
+                float v = rawFeatures[i];
+                if (scaler.imputer_statistics != null && i < scaler.imputer_statistics.Length && float.IsNaN(v))
+                    v = scaler.imputer_statistics[i];
+                normalized[i] = (v - scaler.mean[i]) / scaler.scale[i];
+            }
 
             using var inputTensor = new Tensor<float>(new TensorShape(1, 16), normalized);
             engine.Schedule(inputTensor);

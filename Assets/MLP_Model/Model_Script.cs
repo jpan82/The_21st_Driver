@@ -9,6 +9,7 @@ namespace The21stDriver.Gameplay
     {
         public float[] mean;
         public float[] scale;
+        public float[] imputer_statistics;
     }
 
     public class Model_Script: MonoBehaviour
@@ -45,15 +46,18 @@ namespace The21stDriver.Gameplay
             if (engine == null || scaler == null || rawFeatures.Length != 16)
                 return 4;
 
-            // 3. Normalize
-            for (int i = 0; i < rawFeatures.Length; i++)
+            // 3. Impute then normalize into a local copy so rawFeatures is not mutated.
+            float[] normalized = new float[16];
+            for (int i = 0; i < 16; i++)
             {
-                rawFeatures[i] = (rawFeatures[i] - scaler.mean[i]) / scaler.scale[i];
+                float v = rawFeatures[i];
+                if (scaler.imputer_statistics != null && i < scaler.imputer_statistics.Length && float.IsNaN(v))
+                    v = scaler.imputer_statistics[i];
+                normalized[i] = (v - scaler.mean[i]) / scaler.scale[i];
             }
 
             // 4. Inference
-            // 这里的 TensorFloat 改成了 Tensor<float>
-            using var inputTensor = new Tensor<float>(new TensorShape(1, 16), rawFeatures);
+            using var inputTensor = new Tensor<float>(new TensorShape(1, 16), normalized);
             engine.Schedule(inputTensor);
                         
             // 5. Get output

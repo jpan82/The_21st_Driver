@@ -188,7 +188,7 @@ namespace The21stDriver.Gameplay
             }
             return map;
         }
-
+		
         Vector3 ComputeGridPosition(int gridIndex, out Quaternion gridRotation)
         {
             int   row          = gridIndex / 2;
@@ -215,6 +215,7 @@ namespace The21stDriver.Gameplay
             return gridAnchor.y + 0.04f;
         }
 
+
         void SpawnPlayerCar(int gridIndex)
         {
             GameObject prefab = (playerCarPrefab != null) ? playerCarPrefab : carPrefab;
@@ -224,6 +225,8 @@ namespace The21stDriver.Gameplay
             gridPos.y += playerSpawnHeightOffset;
             GameObject car     = Instantiate(prefab, gridPos, gridRot);
             car.name = "PlayerCar";
+			
+    		AddNameLabel(car, "PLAYER");
 
             if (car.TryGetComponent<Rigidbody>(out Rigidbody rb))
             {
@@ -273,12 +276,53 @@ namespace The21stDriver.Gameplay
         
             GameObject car = Instantiate(carPrefab);
             car.name = Path.GetFileNameWithoutExtension(path);
+			AddNameLabel(car, car.name);
             if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
             car.AddComponent<SmoothMover>().Init(trackData, this);
             
             car.transform.position = gridPos;
             car.transform.rotation = Quaternion.LookRotation(gridForward, Vector3.up);
         }
+		
+		private void AddNameLabel(GameObject car, string name)
+		{
+		    // Create the label object
+		    GameObject labelObj = new GameObject("DriverLabel");
+		    labelObj.transform.SetParent(car.transform);
+		    
+		    // Position it roughly 2.5 meters above the car center
+		    labelObj.transform.localPosition = new Vector3(0, 2.5f, 0);
+		
+		    // Add TextMesh component
+		    TextMesh tm = labelObj.AddComponent<TextMesh>();
+		    tm.text = name.ToUpper();
+		    tm.fontSize = 48;
+		    tm.characterSize = 0.12f;
+		    tm.anchor = TextAnchor.MiddleCenter;
+		    tm.alignment = TextAlignment.Center;
+		    tm.color = Color.yellow; // High visibility for racing
+		
+		    // Add a simple billboard script to make it face the camera
+		    labelObj.AddComponent<NameLabelBillboard>();
+		}
+		
+		// Simple internal class for the billboard effect
+		public class NameLabelBillboard : MonoBehaviour
+		{
+		    private Transform camTransform;
+		
+		    void Start() => camTransform = Camera.main.transform;
+		
+		    void LateUpdate()
+		    {
+		        if (camTransform != null)
+		        {
+		            // Face the camera but keep the text upright
+		            transform.LookAt(transform.position + camTransform.rotation * Vector3.forward,
+		                             camTransform.rotation * Vector3.up);
+		        }
+		    }
+		}
 
         // --- UPDATED TRACK PARSERS TO USE HEADER MAP ---
         bool TryParseTrackGlobalOffset(string[] lines, string trackPathForLog, out Vector3 offset) {

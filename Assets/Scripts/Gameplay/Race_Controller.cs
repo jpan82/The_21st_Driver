@@ -38,6 +38,8 @@ namespace The21stDriver.Gameplay
         [Range(0, 3)]
         [Tooltip("导入时对 x_ref/y_ref 水平轨迹做轻度平滑遍数，抑制 Catmull-Rom 放大的高频抖动")]
         public int replayXzImportSmoothPasses = 1;
+        [Tooltip("勾选后关闭 NPC SmoothMover 上 base/前向/输出 XZ 平滑，便于对照闪现是否来自运行时滤波")]
+        public bool replayDisableRuntimeTrajectorySmooth = false;
 
         [Header("Car Alignment")]
         public float carYOffset = 0.25f;
@@ -278,8 +280,10 @@ namespace The21stDriver.Gameplay
             car.name = Path.GetFileNameWithoutExtension(path);
 			AddNameLabel(car, car.name);
             if (car.TryGetComponent<Rigidbody>(out Rigidbody rb)) rb.isKinematic = true;
-            car.AddComponent<SmoothMover>().Init(trackData, this);
-            
+            SmoothMover mover = car.AddComponent<SmoothMover>();
+            mover.Init(trackData, this);
+            ApplyReplayRuntimeSmoothingIfDisabled(mover);
+
             car.transform.position = gridPos;
             car.transform.rotation = Quaternion.LookRotation(gridForward, Vector3.up);
         }
@@ -323,6 +327,18 @@ namespace The21stDriver.Gameplay
 		        }
 		    }
 		}
+
+        void ApplyReplayRuntimeSmoothingIfDisabled(SmoothMover mover)
+        {
+            if (mover == null || !replayDisableRuntimeTrajectorySmooth)
+            {
+                return;
+            }
+
+            mover.baseTrajectorySmoothTime = 0f;
+            mover.horizontalForwardSmoothTau = 0f;
+            mover.outputHorizontalSmoothTime = 0f;
+        }
 
         // --- UPDATED TRACK PARSERS TO USE HEADER MAP ---
         bool TryParseTrackGlobalOffset(string[] lines, string trackPathForLog, out Vector3 offset) {

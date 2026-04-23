@@ -27,6 +27,7 @@ namespace The21stDriver.Gameplay
         Race_Controller ctrl;
         float      currentSpeed; // signed; + forward
         ReplayTrackSurface trackSurface;
+        int        trackSearchIdx; // per-caller warm-start for ReplayTrackSurface nearest-index search
         bool isGameOver;
         public bool IsOutOfBounds { get; private set; }
         public float CurrentSpeedMs => currentSpeed;
@@ -92,9 +93,12 @@ namespace The21stDriver.Gameplay
             Vector3    newPos = rb.position + newRot * Vector3.forward * currentSpeed * Time.fixedDeltaTime;
 
             // --- Out-of-bounds check ---
-            Vector3 carForward = newRot * Vector3.forward;
+            // Do NOT pass carForward here: the directional penalty in FindNearestCenterlineIndex
+            // is designed for NPC lane-keeping and can snap to a wrong (but heading-aligned) segment
+            // when the car turns at low speed, producing false out-of-bounds positives.
+            // A purely positional nearest-point search is correct for boundary detection.
             if (trackSurface != null &&
-                trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff, carForward))
+                trackSurface.TryGetAdditionalLateralOffsetBounds(newPos, 0f, out float minOff, out float maxOff, ref trackSearchIdx))
             {
                 // maxOff < 0 means car is already past the right edge; minOff > 0 means past the left edge
                 IsOutOfBounds = maxOff < -outOfBoundsGraceMeters || minOff > outOfBoundsGraceMeters;

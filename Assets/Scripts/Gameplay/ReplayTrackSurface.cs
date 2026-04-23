@@ -41,7 +41,7 @@ namespace The21stDriver.Gameplay
                 return false;
             }
 
-            int idx = FindNearestCenterlineIndex(worldPosition, Vector3.zero);
+            int idx = FindNearestCenterlineIndex(worldPosition, Vector3.zero, ref lastNearestIndex);
             if (idx < 0 || idx >= centerline.Count)
             {
                 return false;
@@ -64,8 +64,23 @@ namespace The21stDriver.Gameplay
         /// Returns allowable additional lateral offset range relative to <paramref name="worldPosition"/>.
         /// Negative = left, positive = right in local track frame at nearest centerline sample.
         /// Caller can clamp desired offset into [minOffset, maxOffset] to stay inside track with clearance.
+        /// <para>
+        /// Prefer the overload that takes <c>ref int callerLastIndex</c> so each caller maintains its own
+        /// warm-start state. This overload uses the shared <see cref="lastNearestIndex"/> field, which is
+        /// corrupted when multiple callers (player + NPCs) interleave queries at different track positions.
+        /// </para>
         /// </summary>
         public bool TryGetAdditionalLateralOffsetBounds(Vector3 worldPosition, float edgeClearanceMeters, out float minOffset, out float maxOffset, Vector3 carForward = default)
+        {
+            return TryGetAdditionalLateralOffsetBounds(worldPosition, edgeClearanceMeters, out minOffset, out maxOffset, ref lastNearestIndex, carForward);
+        }
+
+        /// <summary>
+        /// Per-caller overload: <paramref name="callerLastIndex"/> is the caller's own warm-start index,
+        /// initialised to 0 and updated in-place each call. Each caller (player, each NPC) should hold its
+        /// own <c>int</c> field and pass it here so queries never interfere with one another.
+        /// </summary>
+        public bool TryGetAdditionalLateralOffsetBounds(Vector3 worldPosition, float edgeClearanceMeters, out float minOffset, out float maxOffset, ref int callerLastIndex, Vector3 carForward = default)
         {
             minOffset = -Mathf.Max(0.5f, fallbackHalfWidthMeters);
             maxOffset = Mathf.Max(0.5f, fallbackHalfWidthMeters);
@@ -75,7 +90,7 @@ namespace The21stDriver.Gameplay
                 return false;
             }
 
-            int idx = FindNearestCenterlineIndex(worldPosition, carForward);
+            int idx = FindNearestCenterlineIndex(worldPosition, carForward, ref callerLastIndex);
             if (idx < 0 || idx >= centerline.Count)
             {
                 return false;
@@ -136,7 +151,7 @@ namespace The21stDriver.Gameplay
         /// direction disagrees with the car heading are penalised, preventing the
         /// search from snapping to a parallel segment on the opposite side of the track.
         /// </summary>
-        private int FindNearestCenterlineIndex(Vector3 worldPosition, Vector3 carForward)
+        private int FindNearestCenterlineIndex(Vector3 worldPosition, Vector3 carForward, ref int lastIdx)
         {
             if (centerline == null || centerline.Count == 0)
             {
@@ -149,7 +164,7 @@ namespace The21stDriver.Gameplay
             if (carDir.sqrMagnitude > 0.01f) carDir.Normalize(); else useDirection = false;
 
             int n = centerline.Count;
-            int seed = Mathf.Clamp(lastNearestIndex, 0, n - 1);
+            int seed = Mathf.Clamp(lastIdx, 0, n - 1);
 
             int bestIndex = seed;
             float bestScore = ScoreCandidate(seed, worldPosition, carDir, useDirection, n);
@@ -185,7 +200,7 @@ namespace The21stDriver.Gameplay
                 }
             }
 
-            lastNearestIndex = bestIndex;
+            lastIdx = bestIndex;
             return bestIndex;
         }
 

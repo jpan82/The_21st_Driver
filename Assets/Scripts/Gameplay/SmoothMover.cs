@@ -29,6 +29,7 @@ namespace The21stDriver.Gameplay
         private float heldActionUntil;
         private float nextInferenceTime;
         private ReplayTrackSurface replayTrackSurface;
+        private int trackSearchIdx; // per-caller warm-start for ReplayTrackSurface nearest-index search
         private float lateralVelocity;
         private float blendedTargetLateral;
         private readonly EvadeStateMachine evadeStateMachine = new EvadeStateMachine();
@@ -342,7 +343,7 @@ namespace The21stDriver.Gameplay
             float minAllowed = -strategyMaxLateralOffset;
             float maxAllowed = strategyMaxLateralOffset;
             if (replayTrackSurface != null &&
-                replayTrackSurface.TryGetAdditionalLateralOffsetBounds(basePos, strategyTrackEdgeClearance, out float dynMin, out float dynMax))
+                replayTrackSurface.TryGetAdditionalLateralOffsetBounds(basePos, strategyTrackEdgeClearance, out float dynMin, out float dynMax, ref trackSearchIdx))
             {
                 minAllowed = Mathf.Max(minAllowed, dynMin);
                 maxAllowed = Mathf.Min(maxAllowed, dynMax);

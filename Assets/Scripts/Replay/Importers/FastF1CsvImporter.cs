@@ -57,10 +57,15 @@ namespace The21stDriver.Replay.Importers
             Dictionary<string, int> col = BuildHeaderColumnIndex(lines[0]);
             
             int iT = col.ContainsKey("SessionTime") ? col["SessionTime"] : -1;
-            
-            // Prioritize x_ref and y_ref so the cars match the track's coordinate space exactly
-            int iX = col.ContainsKey("x_ref") ? col["x_ref"] : (col.ContainsKey("X") ? col["X"] : 0);
-            int iZ = col.ContainsKey("y_ref") ? col["y_ref"] : (col.ContainsKey("Y") ? col["Y"] : 1);
+
+            if (!col.ContainsKey("x_ref") || !col.ContainsKey("y_ref"))
+            {
+                Debug.LogError($"[FastF1CsvImporter] {filePath}: expected x_ref and y_ref in header (missing column).");
+                return track;
+            }
+
+            int iX = col["x_ref"];
+            int iZ = col["y_ref"];
             int iSpeed = col.ContainsKey("Speed") ? col["Speed"] : -1;
 
             float? t0 = null;
